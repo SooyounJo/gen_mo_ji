@@ -2,28 +2,15 @@
   "61": {
     "inputs": {
       "string_a": [
-        "168",
+        "172",
         0
       ],
-      "string_b": "Pixar cinematic style, 3D glassmorphism, 3D render, minimal style, high-glossy texture, white background",
-      "delimiter": ", "
+      "string_b": "Pixar cinematic style, 3D glassmorphism, 3D render, minimal style, high-glossy texture,white background",
+      "delimiter": ","
     },
     "class_type": "StringConcatenate",
     "_meta": {
       "title": "Concatenate"
-    }
-  },
-  "63": {
-    "inputs": {
-      "torchscript_jit": "default",
-      "image": [
-        "70",
-        0
-      ]
-    },
-    "class_type": "InspyrenetRembg",
-    "_meta": {
-      "title": "Inspyrenet Rembg"
     }
   },
   "67": {
@@ -119,13 +106,13 @@
     },
     "class_type": "LoraLoaderModelOnly",
     "_meta": {
-      "title": "LoraLoaderModelOnly"
+      "title": "Load LoRA"
     }
   },
   "76": {
     "inputs": {
       "text": [
-        "121",
+        "61",
         0
       ],
       "clip": [
@@ -140,7 +127,7 @@
   },
   "77": {
     "inputs": {
-      "seed": 165475385365713,
+      "seed": 142314430976589,
       "steps": 4,
       "cfg": 1,
       "sampler_name": "res_multistep",
@@ -168,75 +155,43 @@
       "title": "KSampler"
     }
   },
-  "113": {
-    "inputs": {
-      "images": [
-        "63",
-        0
-      ]
-    },
-    "class_type": "PreviewImage",
-    "_meta": {
-      "title": "Preview Image"
-    }
-  },
-  "121": {
-    "inputs": {
-      "text_0": "",
-      "text": [
-        "61",
-        0
-      ]
-    },
-    "class_type": "ShowText|pysssss",
-    "_meta": {
-      "title": "Show Text 🐍"
-    }
-  },
-  "126": {
-    "inputs": {
-      "quality": 100,
-      "format": "WEBP",
-      "gzip_compress": false,
-      "image": [
-        "63",
-        0
-      ]
-    },
-    "class_type": "Base64EncodeNode",
-    "_meta": {
-      "title": "Image to Base64 Encode"
-    }
-  },
-  "127": {
-    "inputs": {
-      "text": [
-        "126",
-        0
-      ]
-    },
-    "class_type": "ShowText|pysssss",
-    "_meta": {
-      "title": "Show Text 🐍 (Base64)"
-    }
-  },
   "168": {
     "inputs": {
-      "delimiter": ", ",
-      "clean_whitespace": "true",
-      "text_a": [
-        "172",
+      "model": "RMBG-2.0",
+      "sensitivity": 1,
+      "process_res": 1024,
+      "mask_blur": 0,
+      "mask_offset": 0,
+      "invert_output": false,
+      "refine_foreground": false,
+      "background": "Alpha",
+      "background_color": "#222222",
+      "image": [
+        "70",
         0
       ]
     },
-    "class_type": "Text Concatenate",
+    "class_type": "RMBG",
     "_meta": {
-      "title": "Text Concatenate"
+      "title": "Remove Background (RMBG)"
+    }
+  },
+  "169": {
+    "inputs": {
+      "filename_prefix": "ComfyUI",
+      "images": [
+        "168",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
     }
   },
   "172": {
     "inputs": {
-      "text": "a dog"
+      "text": ""
     },
     "class_type": "Text Multiline",
     "_meta": {
@@ -244,4 +199,3 @@
     }
   }
 }
-

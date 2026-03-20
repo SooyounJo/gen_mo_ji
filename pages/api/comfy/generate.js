@@ -50,6 +50,16 @@ function extractBase64FromHistoryEntry(entry) {
   const outputs = entry?.outputs || entry?.prompt?.outputs || null;
   if (!outputs || typeof outputs !== "object") return "";
 
+  const node127 = outputs["127"];
+  if (node127 && typeof node127 === "object") {
+    // ShowText|pysssss output is usually a list of strings (STRING)
+    for (const k of Object.keys(node127)) {
+      const v = node127[k];
+      if (Array.isArray(v) && typeof v[0] === "string") return v[0];
+      if (typeof v === "string") return v;
+    }
+  }
+
   const node126 = outputs["126"];
   if (node126) {
     const t = node126.text ?? node126.string ?? node126.base64 ?? node126.output ?? null;

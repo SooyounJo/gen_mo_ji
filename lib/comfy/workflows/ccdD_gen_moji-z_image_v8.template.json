@@ -125,7 +125,7 @@
   "76": {
     "inputs": {
       "text": [
-        "121",
+        "61",
         0
       ],
       "clip": [
@@ -168,58 +168,6 @@
       "title": "KSampler"
     }
   },
-  "113": {
-    "inputs": {
-      "images": [
-        "63",
-        0
-      ]
-    },
-    "class_type": "PreviewImage",
-    "_meta": {
-      "title": "Preview Image"
-    }
-  },
-  "121": {
-    "inputs": {
-      "text_0": "",
-      "text": [
-        "61",
-        0
-      ]
-    },
-    "class_type": "ShowText|pysssss",
-    "_meta": {
-      "title": "Show Text 🐍"
-    }
-  },
-  "126": {
-    "inputs": {
-      "quality": 100,
-      "format": "WEBP",
-      "gzip_compress": false,
-      "image": [
-        "63",
-        0
-      ]
-    },
-    "class_type": "Base64EncodeNode",
-    "_meta": {
-      "title": "Image to Base64 Encode"
-    }
-  },
-  "127": {
-    "inputs": {
-      "text": [
-        "126",
-        0
-      ]
-    },
-    "class_type": "ShowText|pysssss",
-    "_meta": {
-      "title": "Show Text 🐍 (Base64)"
-    }
-  },
   "168": {
     "inputs": {
       "delimiter": ", ",
@@ -241,6 +189,19 @@
     "class_type": "Text Multiline",
     "_meta": {
       "title": "Text Multiline"
+    }
+  },
+  "173": {
+    "inputs": {
+      "filename_prefix": "ComfyUI",
+      "images": [
+        "63",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
     }
   }
 }

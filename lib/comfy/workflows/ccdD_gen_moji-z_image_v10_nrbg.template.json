@@ -13,19 +13,6 @@
       "title": "Concatenate"
     }
   },
-  "63": {
-    "inputs": {
-      "torchscript_jit": "default",
-      "image": [
-        "70",
-        0
-      ]
-    },
-    "class_type": "InspyrenetRembg",
-    "_meta": {
-      "title": "Inspyrenet Rembg"
-    }
-  },
   "67": {
     "inputs": {
       "clip_name": "qwen_3_4b.safetensors",
@@ -125,7 +112,7 @@
   "76": {
     "inputs": {
       "text": [
-        "121",
+        "61",
         0
       ],
       "clip": [
@@ -140,7 +127,7 @@
   },
   "77": {
     "inputs": {
-      "seed": 165475385365713,
+      "seed": 1120071143703891,
       "steps": 4,
       "cfg": 1,
       "sampler_name": "res_multistep",
@@ -168,58 +155,6 @@
       "title": "KSampler"
     }
   },
-  "113": {
-    "inputs": {
-      "images": [
-        "63",
-        0
-      ]
-    },
-    "class_type": "PreviewImage",
-    "_meta": {
-      "title": "Preview Image"
-    }
-  },
-  "121": {
-    "inputs": {
-      "text_0": "",
-      "text": [
-        "61",
-        0
-      ]
-    },
-    "class_type": "ShowText|pysssss",
-    "_meta": {
-      "title": "Show Text 🐍"
-    }
-  },
-  "126": {
-    "inputs": {
-      "quality": 100,
-      "format": "WEBP",
-      "gzip_compress": false,
-      "image": [
-        "63",
-        0
-      ]
-    },
-    "class_type": "Base64EncodeNode",
-    "_meta": {
-      "title": "Image to Base64 Encode"
-    }
-  },
-  "127": {
-    "inputs": {
-      "text": [
-        "126",
-        0
-      ]
-    },
-    "class_type": "ShowText|pysssss",
-    "_meta": {
-      "title": "Show Text 🐍 (Base64)"
-    }
-  },
   "168": {
     "inputs": {
       "delimiter": ", ",
@@ -241,6 +176,19 @@
     "class_type": "Text Multiline",
     "_meta": {
       "title": "Text Multiline"
+    }
+  },
+  "173": {
+    "inputs": {
+      "filename_prefix": "ComfyUI",
+      "images": [
+        "70",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
     }
   }
 }

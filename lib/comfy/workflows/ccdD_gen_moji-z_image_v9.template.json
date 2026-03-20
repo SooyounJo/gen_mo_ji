@@ -13,19 +13,6 @@
       "title": "Concatenate"
     }
   },
-  "63": {
-    "inputs": {
-      "torchscript_jit": "default",
-      "image": [
-        "70",
-        0
-      ]
-    },
-    "class_type": "InspyrenetRembg",
-    "_meta": {
-      "title": "Inspyrenet Rembg"
-    }
-  },
   "67": {
     "inputs": {
       "clip_name": "qwen_3_4b.safetensors",
@@ -125,7 +112,7 @@
   "76": {
     "inputs": {
       "text": [
-        "121",
+        "61",
         0
       ],
       "clip": [
@@ -140,7 +127,7 @@
   },
   "77": {
     "inputs": {
-      "seed": 165475385365713,
+      "seed": 156330323383844,
       "steps": 4,
       "cfg": 1,
       "sampler_name": "res_multistep",
@@ -168,58 +155,6 @@
       "title": "KSampler"
     }
   },
-  "113": {
-    "inputs": {
-      "images": [
-        "63",
-        0
-      ]
-    },
-    "class_type": "PreviewImage",
-    "_meta": {
-      "title": "Preview Image"
-    }
-  },
-  "121": {
-    "inputs": {
-      "text_0": "",
-      "text": [
-        "61",
-        0
-      ]
-    },
-    "class_type": "ShowText|pysssss",
-    "_meta": {
-      "title": "Show Text 🐍"
-    }
-  },
-  "126": {
-    "inputs": {
-      "quality": 100,
-      "format": "WEBP",
-      "gzip_compress": false,
-      "image": [
-        "63",
-        0
-      ]
-    },
-    "class_type": "Base64EncodeNode",
-    "_meta": {
-      "title": "Image to Base64 Encode"
-    }
-  },
-  "127": {
-    "inputs": {
-      "text": [
-        "126",
-        0
-      ]
-    },
-    "class_type": "ShowText|pysssss",
-    "_meta": {
-      "title": "Show Text 🐍 (Base64)"
-    }
-  },
   "168": {
     "inputs": {
       "delimiter": ", ",
@@ -241,6 +176,40 @@
     "class_type": "Text Multiline",
     "_meta": {
       "title": "Text Multiline"
+    }
+  },
+  "173": {
+    "inputs": {
+      "filename_prefix": "ComfyUI",
+      "images": [
+        "174",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "174": {
+    "inputs": {
+      "transparency": true,
+      "model": "u2net",
+      "post_processing": false,
+      "only_mask": false,
+      "alpha_matting": false,
+      "alpha_matting_foreground_threshold": 240,
+      "alpha_matting_background_threshold": 10,
+      "alpha_matting_erode_size": 10,
+      "background_color": "none",
+      "images": [
+        "70",
+        0
+      ]
+    },
+    "class_type": "Image Rembg (Remove Background)",
+    "_meta": {
+      "title": "Image Rembg (Remove Background)"
     }
   }
 }
