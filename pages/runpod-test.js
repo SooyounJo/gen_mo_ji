@@ -37,7 +37,7 @@ function toKoreanRunpodMessage(raw, hint) {
   }
 
   if (/Missing ['"]workflow['"] parameter/i.test(combined)) {
-    return "이 RunPod 엔드포인트는 ComfyUI 워크플로우(JSON)가 필요합니다. 'workflow 모드'를 켜고 다시 시도하세요.";
+    return "워커가 workflow(JSON)를 요구합니다. 서버는 default.json 기반 workflow를 보내도록 되어 있습니다 — Next 재시작 후 다시 시도하세요. prompt-only 엔드포인트만 쓰는 경우 .env.local에 RUNPOD_INPUT_PROMPT_ONLY=1";
   }
   if (/request does not exist/i.test(combined) || /RunPod HTTP 404/i.test(s)) {
     return "RunPod에서 해당 작업을 찾을 수 없습니다. 엔드포인트 ID·API 키·작업 ID가 맞는지 확인하세요.";
@@ -71,7 +71,7 @@ function toKoreanRunpodMessage(raw, hint) {
     return "ComfyUI에서 필요한 노드가 워커에 없습니다. RunPod 워커 로그와 커스텀 노드 설치 여부를 확인하세요.";
   }
   if (/COMPLETED but no image base64/i.test(combined)) {
-    return "작업은 완료되었으나 이미지 데이터를 받지 못했습니다. SaveImage 노드와 workflow 모드, RunPod 출력 형식을 확인하세요.";
+    return "작업은 완료되었으나 이미지 데이터를 받지 못했습니다. RunPod 출력 형식(base64/URL)과 /api/runpod/status 의 파싱을 확인하세요.";
   }
   if (/상태 조회 HTTP 오류/i.test(h)) {
     return `${h}\n\n${s || "상태 API 응답이 올바르지 않습니다."}`;
@@ -145,7 +145,6 @@ export default function RunpodTestPage() {
   const [hint, setHint] = useState("");
   const [runpodStatus, setRunpodStatus] = useState("");
   const [elapsedMs, setElapsedMs] = useState(0);
-  const [useWorkflow, setUseWorkflow] = useState(true);
   const [images, setImages] = useState([]);
   const [jobId, setJobId] = useState("");
   const abortRef = useRef(null);
@@ -217,7 +216,6 @@ export default function RunpodTestPage() {
         signal: controller.signal,
         body: JSON.stringify({
           prompt: promptEn,
-          useWorkflow,
           count: 2,
           width: 512,
           height: 512
@@ -253,7 +251,7 @@ export default function RunpodTestPage() {
             if (imgs.length === 0) {
               setStatus("error");
               setError(
-                "RunPod status COMPLETED but no image base64 in response. Check SaveImage node and workflow mode."
+                "RunPod status COMPLETED but no image in response. Check worker output shape and /api/runpod/status parsing."
               );
               setHint("");
               if (tickTimerRef.current) window.clearInterval(tickTimerRef.current);
@@ -268,9 +266,6 @@ export default function RunpodTestPage() {
             setStatus("error");
             setError(pickRunpodFailureText(stData));
             setHint(String(stData?.hint || ""));
-            // If endpoint requires workflow, flip the toggle for next retry.
-            const errOneLine = typeof stData?.error === "string" ? stData.error : JSON.stringify(stData?.error || "");
-            if (errOneLine.includes("Missing 'workflow' parameter")) setUseWorkflow(true);
             if (tickTimerRef.current) window.clearInterval(tickTimerRef.current);
             return;
           }
@@ -319,14 +314,13 @@ export default function RunpodTestPage() {
         </header>
 
         <section className={styles.inputSection}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 10 }}>
+          <div style={{ marginBottom: 10 }}>
             <label className={styles.label} style={{ margin: 0 }}>
               텍스트
             </label>
-            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, opacity: 0.9 }}>
-              <input type="checkbox" checked={useWorkflow} onChange={(e) => setUseWorkflow(e.target.checked)} />
-              workflow 모드
-            </label>
+            <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>
+              RunPod에는 <code>prompt</code> + Comfy API용 <code>workflow</code>(<code>default.json</code> 기준)을 함께 보냅니다.
+            </div>
           </div>
           <textarea
             className={styles.textarea}

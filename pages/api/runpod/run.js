@@ -1,5 +1,4 @@
 import { buildWorkflowFromTemplate, loadWorkflowTemplate } from "@/lib/comfy/buildWorkflow";
-import { prepareWorkflowForRunpodServerless } from "@/lib/runpod/prepareWorkflowServerless";
 
 function json(res, status, data) {
   res.status(status).json(data);
@@ -13,10 +12,6 @@ function stableSeedFromString(s) {
     h = Math.imul(h, 16777619);
   }
   return Math.abs(h) % 2147483647;
-}
-
-function sleep(ms) {
-  return new Promise((r) => setTimeout(r, ms));
 }
 
 async function runpodFetch(url, apiKey, opts) {
@@ -40,10 +35,12 @@ async function runpodFetch(url, apiKey, opts) {
   return data;
 }
 
-function isMissingWorkflowError(msg) {
-  return /Missing 'workflow' parameter/i.test(String(msg || ""));
-}
-
+/**
+ * ComfyUI Serverless 엔드포인트는 보통 `input.workflow`(API JSON)가 필요합니다.
+ * `default.json` + buildWorkflowFromTemplate 로 채운 뒤 `prompt`와 함께 보냅니다.
+ *
+ * prompt-only 만 지원하는 핸들러만 쓸 때: .env 에 RUNPOD_INPUT_PROMPT_ONLY=1
+ */
 export default async function handler(req, res) {
   if (req.method !== "POST") return json(res, 405, { error: "Method not allowed" });
 
@@ -52,9 +49,13 @@ export default async function handler(req, res) {
   if (!apiKey) return json(res, 500, { error: "Missing RUNPOD_API_KEY" });
   if (!endpointId) return json(res, 500, { error: "Missing RUNPOD_ENDPOINT_ID" });
 
-  const { prompt, input, width = 1024, height = 1024, count = 2, seed, useWorkflow } = req.body || {};
+  const { prompt, input, width = 1024, height = 1024, count = 2, seed } = req.body || {};
   const p = String(prompt || input?.prompt || "").trim();
   if (!p) return json(res, 400, { error: "prompt is required" });
+
+  const promptOnly =
+    String(process.env.RUNPOD_INPUT_PROMPT_ONLY || "").toLowerCase() === "true" ||
+    process.env.RUNPOD_INPUT_PROMPT_ONLY === "1";
 
   try {
     const n = Math.max(1, Math.min(4, Number(count) || 2));
@@ -62,12 +63,8 @@ export default async function handler(req, res) {
 
     const runUrl = `https://api.runpod.ai/v2/${encodeURIComponent(endpointId)}/run`;
 
-    // Some endpoints accept just { input: { prompt: "..." } } (no ComfyUI workflow).
-    // Others (ComfyUI serverless) require workflow. Support both with auto-detect.
-    // Default to prompt-only to match the curl form, unless explicitly forced to workflow.
-    // If the endpoint actually requires workflow, we detect it by polling status once and fallback.
-    const explicit = useWorkflow === true ? "workflow" : "prompt";
     const baseInput = { ...(input || {}) };
+    if ("workflow" in baseInput) delete baseInput.workflow;
 
     const buildPromptOnlyInput = () => ({
       ...baseInput,
@@ -79,7 +76,6 @@ export default async function handler(req, res) {
     });
 
     const buildWorkflowInput = async () => {
-      if (baseInput.workflow) return { ...baseInput };
       let template;
       try {
         template = await loadWorkflowTemplate();
@@ -93,29 +89,35 @@ export default async function handler(req, res) {
         height: Number(height),
         batchSize: n
       });
-      const wfServerless = prepareWorkflowForRunpodServerless(wf);
-      return { ...baseInput, workflow: wfServerless };
+      return {
+        ...baseInput,
+        prompt: p,
+        workflow: wf
+      };
     };
 
-    let run = null;
-    if (explicit === "prompt") {
-      run = await runpodFetch(runUrl, apiKey, { method: "POST", body: JSON.stringify({ input: buildPromptOnlyInput() }) });
-
-      // If the endpoint silently accepts prompt-only then fails later, catch it quickly and fallback.
-      const jobIdMaybe = run?.id;
-      if (jobIdMaybe) {
-        const statusUrl = `https://api.runpod.ai/v2/${encodeURIComponent(endpointId)}/status/${encodeURIComponent(jobIdMaybe)}`;
-        await sleep(600);
-        const st = await runpodFetch(statusUrl, apiKey, { method: "GET" }).catch(() => null);
-        if (st?.status === "FAILED" && isMissingWorkflowError(st?.error)) {
-          const wfInput = await buildWorkflowInput();
-          run = await runpodFetch(runUrl, apiKey, { method: "POST", body: JSON.stringify({ input: wfInput }) });
-        }
-      }
-    } else {
-      const wfInput = await buildWorkflowInput();
-      run = await runpodFetch(runUrl, apiKey, { method: "POST", body: JSON.stringify({ input: wfInput }) });
+    const dbg =
+      req.body?.debugInput === true ||
+      req.body?.debugInput === 1 ||
+      req.body?.debugInput === "1" ||
+      req.body?.debugWorkflow === true ||
+      req.body?.debugWorkflow === 1 ||
+      req.body?.debugWorkflow === "1";
+    if (dbg) {
+      const wfPayload = await buildWorkflowInput();
+      return json(res, 200, {
+        debug: true,
+        promptOnly,
+        input: promptOnly ? buildPromptOnlyInput() : wfPayload
+      });
     }
+
+    const payload = promptOnly ? buildPromptOnlyInput() : await buildWorkflowInput();
+
+    const run = await runpodFetch(runUrl, apiKey, {
+      method: "POST",
+      body: JSON.stringify({ input: payload })
+    });
 
     const jobId = run?.id;
     if (!jobId) throw new Error(`RunPod did not return job id: ${JSON.stringify(run)}`);
@@ -125,4 +127,3 @@ export default async function handler(req, res) {
     return json(res, 502, { error: "RunPod run failed", detail: String(e?.message || e) });
   }
 }
-

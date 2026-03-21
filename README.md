@@ -28,7 +28,8 @@ yarn dev
 
 ## RunPod Serverless + ComfyUI
 
-- API: `pages/api/runpod/run.js`, `pages/api/runpod/status/[id].js`, 테스트 UI: `pages/runpod-test.js`
+- API: `pages/api/runpod/run.js`(기본: `prompt` + `workflow`=`default.json` 채움), `pages/api/runpod/status/[id].js`, 테스트 UI: `pages/runpod-test.js`
+- 로컬 Comfy `/api/comfy/generate` 워크플로: 루트 **`default.json`** 고정 (`lib/comfy/buildWorkflow.js`)
 - 워커에서 모델·`custom_nodes` 가 **Handler가 스캔하는 경로**와 다르면 `not in []` / 노드 누락이 납니다. 심볼릭 링크로 맞추는 방법은 **`docs/runpod-serverless-worker-paths.md`** 참고.
 - 환경 변수 예시: **`.env.local.example`**
 

@@ -65,7 +65,7 @@ function buildHintFromError(err) {
   }
 
   if (/Missing 'workflow' parameter/i.test(s)) {
-    return "이 엔드포인트는 요청 input에 ComfyUI workflow(JSON)가 필요합니다(prompt-only 미지원).";
+    return "워커가 workflow(JSON)를 요구합니다. /api/runpod/run 은 기본적으로 default.json 기반 workflow를 보냅니다. 여전히 이 오류면 RUNPOD_INPUT_PROMPT_ONLY=1 로 prompt-only만 보내는지 확인하거나, Next 서버를 재시작하세요.";
   }
 
   if (/Workflow validation failed/i.test(s)) {

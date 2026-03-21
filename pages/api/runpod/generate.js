@@ -1,8 +1,5 @@
-import { buildWorkflowFromTemplate, loadWorkflowTemplate } from "@/lib/comfy/buildWorkflow";
-import { prepareWorkflowForRunpodServerless } from "@/lib/runpod/prepareWorkflowServerless";
-
-// 참고: 현재 UI(runpod-test)는 /api/runpod/run + /api/runpod/status 를 사용합니다.
-// 이 라우트는 동기 대기(폴링 완료까지)용 레거시이며, 워크플로 전처리는 run.js 와 동일 모듈을 씁니다.
+// 참고: UI(runpod-test)는 /api/runpod/run + /api/runpod/status 를 사용합니다.
+// 이 라우트는 동기 대기(폴링 완료까지)용 레거시이며, RunPod에는 prompt-only(input.prompt 등)로 보냅니다(run.js와 동일).
 
 function json(res, status, data) {
   res.status(status).json(data);
@@ -119,34 +116,20 @@ export default async function handler(req, res) {
   const n = Math.max(1, Math.min(4, Number(count) || 2));
   const baseSeed = Number.isFinite(seed) ? Number(seed) : stableSeedFromString(p);
 
-  let template;
   try {
-    template = await loadWorkflowTemplate();
-  } catch (e) {
-    return json(res, 500, { error: "Failed to load workflow template", detail: String(e?.message || e) });
-  }
-
-  try {
-    // Submit async job
-    const wf = buildWorkflowFromTemplate(template, {
-      prompt: p,
-      seed: baseSeed,
-      width: Number(width),
-      height: Number(height),
-      batchSize: n
-    });
-    const wfServerless = prepareWorkflowForRunpodServerless(wf);
-    // Spec: send full workflow + overrides for node 172.text
-    const overrides = {
-      "172": {
-        text: p
-      }
-    };
-
     const runUrl = `https://api.runpod.ai/v2/${encodeURIComponent(endpointId)}/run`;
     const run = await runpodFetch(runUrl, apiKey, {
       method: "POST",
-      body: JSON.stringify({ input: { ...(input || {}), prompt: p, workflow: wfServerless, overrides } })
+      body: JSON.stringify({
+        input: {
+          ...(input || {}),
+          prompt: p,
+          width: Number(width),
+          height: Number(height),
+          count: n,
+          seed: baseSeed
+        }
+      })
     });
 
     const jobId = run?.id;

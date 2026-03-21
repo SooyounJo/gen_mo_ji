@@ -1,6 +1,19 @@
 # RunPod Serverless 워커 — 모델·커스텀 노드 경로 (심볼릭 링크)
 
-이 프로젝트의 ComfyUI 워크플로는 **RunPod Serverless Handler**가 스캔하는 경로와, 실제 파일이 있는 **ComfyUI 설치 경로**가 다르면 `not in []`, `value_not_in_list`, **Text Multiline(172) 없음** 등으로 실패할 수 있습니다.
+## Next.js API (`/api/runpod/run`)
+
+기본: **`input.prompt`** + **`input.workflow`** (프로젝트 루트 **`default.json`** 을 `lib/comfy/buildWorkflow.js`로 채움). ComfyUI Serverless가 흔히 요구하는 형태입니다.
+
+prompt만 받는 커스텀 핸들러만 쓸 때: `.env.local`에 **`RUNPOD_INPUT_PROMPT_ONLY=1`**
+
+```bash
+# 디버그: 실제로 보낼 input 미리보기 (서버 로컬)
+# POST /api/runpod/run  body: { "prompt": "test", "debugWorkflow": true }
+```
+
+---
+
+이 프로젝트에서 **로컬 ComfyUI**로 보내는 워크플로는 루트 **`default.json`** 고정입니다. **RunPod Serverless Handler**가 스캔하는 경로와, 실제 파일이 있는 **ComfyUI 설치 경로**가 다르면 `not in []`, `value_not_in_list` 등으로 실패할 수 있습니다.
 
 ## Handler가 보통 스캔하는 경로
 
