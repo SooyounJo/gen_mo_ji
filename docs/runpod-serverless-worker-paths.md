@@ -2,9 +2,9 @@
 
 ## Next.js API (`/api/runpod/run`)
 
-기본: **`input.prompt`** + **`input.workflow`** (프로젝트 루트 **`default.json`** 을 `lib/comfy/buildWorkflow.js`로 채움). ComfyUI Serverless가 흔히 요구하는 형태입니다.
+워크플로를 실어 보낼 때: **`input.prompt`** + **`input.workflow`** — 템플릿은 루트 **`z image+rmbg (1).json` 하나**만 (`lib/comfy/buildWorkflow.js`).
 
-prompt만 받는 커스텀 핸들러만 쓸 때: `.env.local`에 **`RUNPOD_INPUT_PROMPT_ONLY=1`**
+prompt 만 받는 핸들러: `.env.local`에 **`RUNPOD_INPUT_PROMPT_ONLY=1`**
 
 ```bash
 # 디버그: 실제로 보낼 input 미리보기 (서버 로컬)
@@ -13,7 +13,7 @@ prompt만 받는 커스텀 핸들러만 쓸 때: `.env.local`에 **`RUNPOD_INPUT
 
 ---
 
-이 프로젝트에서 **로컬 ComfyUI**로 보내는 워크플로는 루트 **`default.json`** 고정입니다. **RunPod Serverless Handler**가 스캔하는 경로와, 실제 파일이 있는 **ComfyUI 설치 경로**가 다르면 `not in []`, `value_not_in_list` 등으로 실패할 수 있습니다.
+**로컬 ComfyUI** (`/api/comfy/generate`)도 같은 **`z image+rmbg (1).json`** 템플릿만 사용합니다. **RunPod Serverless Handler** 스캔 경로와 실제 ComfyUI 설치 경로가 다르면 `not in []`, `value_not_in_list` 등으로 실패할 수 있습니다.
 
 ## Handler가 보통 스캔하는 경로
 

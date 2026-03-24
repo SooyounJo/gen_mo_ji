@@ -1,5 +1,5 @@
 // 참고: UI(runpod-test)는 /api/runpod/run + /api/runpod/status 를 사용합니다.
-// 이 라우트는 동기 대기(폴링 완료까지)용 레거시이며, RunPod에는 prompt-only(input.prompt 등)로 보냅니다(run.js와 동일).
+// 이 라우트는 동기 대기용 레거시; RunPod body 는 { input: { prompt } } 형태(run.js 의 prompt-only 와 같음).
 
 function json(res, status, data) {
   res.status(status).json(data);
@@ -7,16 +7,6 @@ function json(res, status, data) {
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
-}
-
-function stableSeedFromString(s) {
-  const str = String(s || "");
-  let h = 2166136261;
-  for (let i = 0; i < str.length; i += 1) {
-    h ^= str.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return Math.abs(h) % 2147483647;
 }
 
 function normalizeImagesFromOutput(output) {
@@ -109,12 +99,9 @@ export default async function handler(req, res) {
   if (!apiKey) return json(res, 500, { error: "Missing RUNPOD_API_KEY" });
   if (!endpointId) return json(res, 500, { error: "Missing RUNPOD_ENDPOINT_ID" });
 
-  const { prompt, input, width = 1024, height = 1024, count = 2, seed } = req.body || {};
+  const { prompt, input } = req.body || {};
   const p = String(prompt || input?.prompt || "").trim();
   if (!p) return json(res, 400, { error: "prompt is required" });
-
-  const n = Math.max(1, Math.min(4, Number(count) || 2));
-  const baseSeed = Number.isFinite(seed) ? Number(seed) : stableSeedFromString(p);
 
   try {
     const runUrl = `https://api.runpod.ai/v2/${encodeURIComponent(endpointId)}/run`;
@@ -123,11 +110,7 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         input: {
           ...(input || {}),
-          prompt: p,
-          width: Number(width),
-          height: Number(height),
-          count: n,
-          seed: baseSeed
+          prompt: p
         }
       })
     });

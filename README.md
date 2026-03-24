@@ -28,8 +28,8 @@ yarn dev
 
 ## RunPod Serverless + ComfyUI
 
-- API: `pages/api/runpod/run.js`(기본: `prompt` + `workflow`=`default.json` 채움), `pages/api/runpod/status/[id].js`, 테스트 UI: `pages/runpod-test.js`
-- 로컬 Comfy `/api/comfy/generate` 워크플로: 루트 **`default.json`** 고정 (`lib/comfy/buildWorkflow.js`)
-- 워커에서 모델·`custom_nodes` 가 **Handler가 스캔하는 경로**와 다르면 `not in []` / 노드 누락이 납니다. 심볼릭 링크로 맞추는 방법은 **`docs/runpod-serverless-worker-paths.md`** 참고.
-- 환경 변수 예시: **`.env.local.example`**
+- **RunPod HTTP**: `POST https://api.runpod.ai/v2/<RUNPOD_ENDPOINT_ID>/run` + `GET .../status/<job_id>` — 구현은 `pages/api/runpod/run.js`, `pages/api/runpod/status/[id].js`, 테스트 UI `pages/runpod-test.js`.
+- **워크플로 JSON 템플릿**: 저장소에서는 **`z image+rmbg (1).json` 하나만** 사용합니다 (`lib/comfy/buildWorkflow.js`의 `WORKFLOW_TEMPLATE_FILE`). RunPod에 workflow 를 실어 보낼 때도 이 파일만 기준으로 채웁니다. `RUNPOD_INPUT_PROMPT_ONLY=1` 이면 RunPod 페이로드는 curl 예시처럼 `input.prompt` 위주이고, 워커 쪽에서 고정 그래프를 씁니다.
+- 워커에서 모델·`custom_nodes` 가 Handler 스캔 경로와 다르면 `not in []` / 노드 누락이 납니다. → **`docs/runpod-serverless-worker-paths.md`**
+- 환경 변수: **`.env.local.example`**
 

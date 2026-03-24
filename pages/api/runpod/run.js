@@ -36,10 +36,9 @@ async function runpodFetch(url, apiKey, opts) {
 }
 
 /**
- * ComfyUI Serverless 엔드포인트는 보통 `input.workflow`(API JSON)가 필요합니다.
- * `default.json` + buildWorkflowFromTemplate 로 채운 뒤 `prompt`와 함께 보냅니다.
- *
- * prompt-only 만 지원하는 핸들러만 쓸 때: .env 에 RUNPOD_INPUT_PROMPT_ONLY=1
+ * RunPod: POST https://api.runpod.ai/v2/{RUNPOD_ENDPOINT_ID}/run — body `{ "input": … }`.
+ * - RUNPOD_INPUT_PROMPT_ONLY=1 → input 은 주로 `{ prompt }` (공식 curl 예시와 동일).
+ * - 그 외 → `z image+rmbg (1).json` 템플릿만으로 만든 `workflow` + `prompt` 를 input 에 포함.
  */
 export default async function handler(req, res) {
   if (req.method !== "POST") return json(res, 405, { error: "Method not allowed" });
@@ -68,11 +67,7 @@ export default async function handler(req, res) {
 
     const buildPromptOnlyInput = () => ({
       ...baseInput,
-      prompt: p,
-      width: Number(width),
-      height: Number(height),
-      count: n,
-      seed: baseSeed
+      prompt: p
     });
 
     const buildWorkflowInput = async () => {
@@ -104,11 +99,18 @@ export default async function handler(req, res) {
       req.body?.debugWorkflow === 1 ||
       req.body?.debugWorkflow === "1";
     if (dbg) {
+      if (promptOnly) {
+        return json(res, 200, {
+          debug: true,
+          promptOnly,
+          input: buildPromptOnlyInput()
+        });
+      }
       const wfPayload = await buildWorkflowInput();
       return json(res, 200, {
         debug: true,
         promptOnly,
-        input: promptOnly ? buildPromptOnlyInput() : wfPayload
+        input: wfPayload
       });
     }
 

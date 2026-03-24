@@ -37,7 +37,7 @@ function toKoreanRunpodMessage(raw, hint) {
   }
 
   if (/Missing ['"]workflow['"] parameter/i.test(combined)) {
-    return "워커가 workflow(JSON)를 요구합니다. 서버는 default.json 기반 workflow를 보내도록 되어 있습니다 — Next 재시작 후 다시 시도하세요. prompt-only 엔드포인트만 쓰는 경우 .env.local에 RUNPOD_INPUT_PROMPT_ONLY=1";
+    return "워커가 workflow(JSON)를 요구합니다. 현재 서버는 prompt-only로 보내고 있습니다(RUNPOD_INPUT_PROMPT_ONLY=1). 이 에러가 뜨면 해당 엔드포인트가 prompt-only를 지원하지 않는 구성입니다.";
   }
   if (/request does not exist/i.test(combined) || /RunPod HTTP 404/i.test(s)) {
     return "RunPod에서 해당 작업을 찾을 수 없습니다. 엔드포인트 ID·API 키·작업 ID가 맞는지 확인하세요.";
@@ -319,7 +319,9 @@ export default function RunpodTestPage() {
               텍스트
             </label>
             <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>
-              RunPod에는 <code>prompt</code> + Comfy API용 <code>workflow</code>(<code>default.json</code> 기준)을 함께 보냅니다.
+              서버 설정에 따라 RunPod로 <code>prompt</code>만 보내거나(<code>RUNPOD_INPUT_PROMPT_ONLY=1</code>),{" "}
+              <code>prompt</code>+Comfy API용 <code>workflow</code>를 같이 보냅니다. 워크플로 템플릿 파일은{" "}
+              <code>z image+rmbg (1).json</code> 하나만 씁니다.
             </div>
           </div>
           <textarea

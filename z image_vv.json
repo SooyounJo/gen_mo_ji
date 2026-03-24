@@ -110,7 +110,7 @@
   },
   "185": {
     "inputs": {
-      "seed": 752677798417112,
+      "seed": 510589258079164,
       "steps": 4,
       "cfg": 1,
       "sampler_name": "res_multistep",
@@ -142,13 +142,32 @@
     "inputs": {
       "filename_prefix": "ComfyUI",
       "images": [
-        "179",
+        "189",
         0
       ]
     },
     "class_type": "SaveImage",
     "_meta": {
       "title": "Save Image"
+    }
+  },
+  "189": {
+    "inputs": {
+      "model": "BiRefNet-general",
+      "mask_blur": 0,
+      "mask_offset": 0,
+      "invert_output": false,
+      "refine_foreground": false,
+      "background": "Alpha",
+      "background_color": "#222222",
+      "image": [
+        "179",
+        0
+      ]
+    },
+    "class_type": "BiRefNetRMBG",
+    "_meta": {
+      "title": "BiRefNet Remove Background (RMBG)"
     }
   }
 }
