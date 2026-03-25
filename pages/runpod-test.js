@@ -321,7 +321,7 @@ export default function RunpodTestPage() {
             <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>
               서버 설정에 따라 RunPod로 <code>prompt</code>만 보내거나(<code>RUNPOD_INPUT_PROMPT_ONLY=1</code>),{" "}
               <code>prompt</code>+Comfy API용 <code>workflow</code>를 같이 보냅니다. 워크플로 템플릿 파일은{" "}
-              <code>z image+rmbg (1).json</code> 하나만 씁니다.
+              <code>z image_v4.json</code> 하나만 씁니다.
             </div>
           </div>
           <textarea

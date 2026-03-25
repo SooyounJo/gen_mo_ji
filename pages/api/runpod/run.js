@@ -38,7 +38,7 @@ async function runpodFetch(url, apiKey, opts) {
 /**
  * RunPod: POST https://api.runpod.ai/v2/{RUNPOD_ENDPOINT_ID}/run — body `{ "input": … }`.
  * - RUNPOD_INPUT_PROMPT_ONLY=1 → input 은 주로 `{ prompt }` (공식 curl 예시와 동일).
- * - 그 외 → `z image+rmbg (1).json` 템플릿만으로 만든 `workflow` + `prompt` 를 input 에 포함.
+ * - 그 외 → `z image_v4.json` 템플릿만으로 만든 `workflow` + `prompt` 를 input 에 포함.
  */
 export default async function handler(req, res) {
   if (req.method !== "POST") return json(res, 405, { error: "Method not allowed" });

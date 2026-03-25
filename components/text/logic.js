@@ -268,7 +268,7 @@ function actionEn(actionKr) {
 }
 
 function buildImagePrompt({ character, emotion, action, props, fullText, seed }) {
-  // 순서: 주체 → 행동/상태 → 모습(시각특성/소품) → 결론/환경(맥락)
+  // 주체 → 행동 → (소품). 조명·재질·배경·랜더 룩은 전부 lib/comfy/buildWorkflow.js FIXED_STYLE_SUFFIX 로만 고정.
   const noun = toEnglishNoun(character);
   const subject = withArticle(noun);
 
@@ -297,41 +297,12 @@ function buildImagePrompt({ character, emotion, action, props, fullText, seed })
             ? `is ${act} into a ${transformTo}, with a ${emo} expression`
             : `is ${act} with a ${emo} expression`;
 
-  const paletteByEmotion = {
-    happy: ["lime", "pastel yellow", "cream"],
-    excited: ["pink", "lavender", "sky blue"],
-    sad: ["pastel blue", "lilac gray", "mint gray"],
-    angry: ["red", "burgundy", "charcoal"],
-    scared: ["purple", "deep blue", "gray"],
-    surprised: ["lemon", "coral", "off-white"],
-    touched: ["peach", "champagne", "off-white"],
-    bored: ["beige", "light gray", "off-white"]
-  };
-  const palette = (paletteByEmotion[emo] || paletteByEmotion.excited).join(", ");
-  const material = pickStable(["glossy 3D", "jelly-like translucent", "soft rubbery", "glassy reflective"], seed);
-  const size = pickStable(["tiny", "small", "palm-sized"], seed);
-  const lighting = pickStable(["soft studio lighting", "gentle rim light", "subtle glow"], seed);
-
   const propBits = (props || [])
     .map((p) => String(p))
     .filter((p) => p && !/(날씨|효과)/.test(p))
     .slice(0, 3)
     .map((p) => toEnglishNoun(p.replace(/\(.*?\)/g, "")));
-  const propClause = propBits.length ? `, featuring ${propBits.join(", ")}` : "";
-
-  const lookClause = `It looks ${size}, ${material}, in a ${palette} palette, with ${lighting}${propClause}.`;
-
-  const env = (() => {
-    const t = String(fullText || "");
-    if (/(비|비오)/.test(t)) return "in a rainy scene";
-    if (/(바람)/.test(t)) return "in a breezy scene";
-    if (action === "산책하기") return "on a clean sidewalk";
-    if (action === "먹기") return "at a cozy cafe";
-    if (action === "주기") return "in a warm room";
-    if (action === "변신하기") return "in a burst of sparkles";
-    if (action === "떨어뜨리기") return "mid-air, just before it hits the ground";
-    return pickStable(["on a minimal soft-gradient background", "as a cute sticker on a clean background"], seed);
-  })();
+  const propSuffix = propBits.length ? ` Featuring ${propBits.join(", ")}.` : "";
 
   // +제목+표현어(한 단어)
   const expressionWord = pickStable(
@@ -366,7 +337,7 @@ function buildImagePrompt({ character, emotion, action, props, fullText, seed })
     return `${adj} ${base}`;
   })();
 
-  const prompt = `${subject} ${actionClause}. ${lookClause} ${env}.`;
+  const prompt = `${subject} ${actionClause}.${propSuffix}`;
   return { prompt, title, expressionWord };
 }
 
