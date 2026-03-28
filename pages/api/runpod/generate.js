@@ -1,3 +1,5 @@
+import { applyAlphaPipeline } from "@/lib/runpod/applyAlphaPipeline";
+
 // 참고: UI(runpod-test)는 /api/runpod/run + /api/runpod/status 를 사용합니다.
 // 이 라우트는 동기 대기용 레거시; RunPod body 는 { input: { prompt } } 형태(run.js 의 prompt-only 와 같음).
 
@@ -122,7 +124,8 @@ export default async function handler(req, res) {
     const finalStatus = await waitForRunpodJob({ endpointId, apiKey, jobId });
 
     const output = finalStatus?.output ?? null;
-    const images = normalizeImagesFromOutput(output);
+    let images = normalizeImagesFromOutput(output);
+    images = await applyAlphaPipeline(images);
 
     return json(res, 200, {
       id: jobId,

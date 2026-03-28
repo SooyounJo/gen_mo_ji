@@ -415,7 +415,11 @@ export default function TextPage() {
                           ? `${styles.draftPreviewBox} ${styles.draftPreviewSelected}`
                           : styles.draftPreviewBox
                       }
-                      style={{ background: draftPreviewColors?.[0] || "#D1D5DB" }}
+                      style={
+                        draftPreviewImages?.[0]
+                          ? undefined
+                          : { background: draftPreviewColors?.[0] || "#D1D5DB" }
+                      }
                       onMouseDown={(e) => e.preventDefault()}
                       onClick={() => {
                         setDraftPreviewIndex(0);
@@ -423,7 +427,11 @@ export default function TextPage() {
                       }}
                       aria-label="프리뷰 1 선택"
                     >
-                      {draftPreviewImages?.[0] ? <img className={styles.draftPreviewImg} src={draftPreviewImages[0]} alt="" /> : null}
+                      {draftPreviewImages?.[0] ? (
+                        <span className={styles.draftPreviewAlpha}>
+                          <img className={styles.draftPreviewImg} src={draftPreviewImages[0]} alt="" />
+                        </span>
+                      ) : null}
                       {draftGenerateStatus === "loading" ? <span className={styles.draftPreviewLoading} aria-hidden="true" /> : null}
                     </button>
                     <button
@@ -433,7 +441,11 @@ export default function TextPage() {
                           ? `${styles.draftPreviewBox} ${styles.draftPreviewSelected}`
                           : styles.draftPreviewBox
                       }
-                      style={{ background: draftPreviewColors?.[1] || "#E5E7EB" }}
+                      style={
+                        draftPreviewImages?.[1]
+                          ? undefined
+                          : { background: draftPreviewColors?.[1] || "#E5E7EB" }
+                      }
                       onMouseDown={(e) => e.preventDefault()}
                       onClick={() => {
                         setDraftPreviewIndex(1);
@@ -441,7 +453,11 @@ export default function TextPage() {
                       }}
                       aria-label="프리뷰 2 선택"
                     >
-                      {draftPreviewImages?.[1] ? <img className={styles.draftPreviewImg} src={draftPreviewImages[1]} alt="" /> : null}
+                      {draftPreviewImages?.[1] ? (
+                        <span className={styles.draftPreviewAlpha}>
+                          <img className={styles.draftPreviewImg} src={draftPreviewImages[1]} alt="" />
+                        </span>
+                      ) : null}
                       {draftGenerateStatus === "loading" ? <span className={styles.draftPreviewLoading} aria-hidden="true" /> : null}
                     </button>
                   </div>

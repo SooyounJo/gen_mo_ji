@@ -531,9 +531,22 @@
   box-shadow: 0 0 0 3px rgba(82, 39, 255, 0.18), 0 10px 18px rgba(17, 24, 39, 0.1);
 }
 
+.draftPreviewAlpha {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background-color: #e5e7eb;
+  background-image: linear-gradient(45deg, #d1d5db 25%, transparent 25%),
+    linear-gradient(-45deg, #d1d5db 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #d1d5db 75%),
+    linear-gradient(-45deg, transparent 75%, #d1d5db 75%);
+  background-size: 8px 8px;
+  background-position: 0 0, 0 4px, 4px -4px, -4px 0;
+}
+
 .draftPreviewImg {
   position: absolute;
   inset: 0;
+  z-index: 1;
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -543,6 +556,7 @@
 .draftPreviewLoading {
   position: absolute;
   inset: 0;
+  z-index: 2;
   background: rgba(255, 255, 255, 0.55);
   backdrop-filter: blur(2px);
 }

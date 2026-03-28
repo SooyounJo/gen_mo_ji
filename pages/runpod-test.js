@@ -395,7 +395,11 @@ export default function RunpodTestPage() {
                 ) : null}
               </div>
             ) : null}
-            {status !== "loading" && mainImage ? <img className={styles.mainImg} src={mainImage} alt="generated" /> : null}
+            {status !== "loading" && mainImage ? (
+              <div className={styles.alphaImgWrap}>
+                <img className={styles.mainImg} src={mainImage} alt="generated" />
+              </div>
+            ) : null}
             {status !== "loading" && !mainImage ? <div className={styles.emptyCard}>이미지가 여기에 표시됩니다</div> : null}
           </div>
         </section>

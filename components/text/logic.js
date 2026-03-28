@@ -268,7 +268,7 @@ function actionEn(actionKr) {
 }
 
 function buildImagePrompt({ character, emotion, action, props, fullText, seed }) {
-  // 주체 → 행동 → (소품). 조명·재질·배경·랜더 룩은 전부 lib/comfy/buildWorkflow.js FIXED_STYLE_SUFFIX 로만 고정.
+  // 주체 → 행동 → (소품). 조명·재질·배경·랜더 룩은 전부 lib/comfy/buildWorkflow.js CHROMA_* 고정 블록으로만 고정.
   const noun = toEnglishNoun(character);
   const subject = withArticle(noun);
 

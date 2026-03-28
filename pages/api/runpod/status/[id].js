@@ -1,3 +1,5 @@
+import { applyAlphaPipeline } from "@/lib/runpod/applyAlphaPipeline";
+
 function json(res, status, data) {
   // Prevent browser/edge caching; avoid 304 which breaks client-side JSON parsing.
   res.setHeader("cache-control", "no-store, max-age=0");
@@ -178,7 +180,8 @@ export default async function handler(req, res) {
     const st = await runpodFetch(statusUrl, apiKey, { method: "GET" });
     const output = st?.output ?? null;
     const error = st?.error ?? null;
-    const images = normalizeImagesFromOutput(output);
+    let images = normalizeImagesFromOutput(output);
+    images = await applyAlphaPipeline(images);
     const hint = buildHintFromError(error);
     const failureDetail = buildFailureDetail(error, output);
     return json(res, 200, { id, status: st?.status || "", output, error, hint, images, failureDetail });
