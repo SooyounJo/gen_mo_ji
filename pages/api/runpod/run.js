@@ -48,7 +48,7 @@ export default async function handler(req, res) {
   if (!apiKey) return json(res, 500, { error: "Missing RUNPOD_API_KEY" });
   if (!endpointId) return json(res, 500, { error: "Missing RUNPOD_ENDPOINT_ID" });
 
-  const { prompt, input, width = 1024, height = 1024, count = 2, seed } = req.body || {};
+  const { prompt, input, width = 1024, height = 1024, count = 2, seed, includeResolvedPrompt } = req.body || {};
   const p = String(prompt || input?.prompt || "").trim();
   if (!p) return json(res, 400, { error: "prompt is required" });
 
@@ -115,6 +115,12 @@ export default async function handler(req, res) {
     }
 
     const payload = promptOnly ? buildPromptOnlyInput() : await buildWorkflowInput();
+    const resolvedPrompt =
+      includeResolvedPrompt && !promptOnly
+        ? String(payload?.workflow?.["184"]?.inputs?.text || "")
+        : includeResolvedPrompt && promptOnly
+          ? p
+          : "";
 
     const run = await runpodFetch(runUrl, apiKey, {
       method: "POST",
@@ -124,7 +130,7 @@ export default async function handler(req, res) {
     const jobId = run?.id;
     if (!jobId) throw new Error(`RunPod did not return job id: ${JSON.stringify(run)}`);
 
-    return json(res, 200, { id: jobId, status: run?.status || "SUBMITTED" });
+    return json(res, 200, { id: jobId, status: run?.status || "SUBMITTED", ...(resolvedPrompt ? { resolvedPrompt } : {}) });
   } catch (e) {
     return json(res, 502, { error: "RunPod run failed", detail: String(e?.message || e) });
   }

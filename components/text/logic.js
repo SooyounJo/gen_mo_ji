@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/router";
+import { buildImagePrompt, toEnglishNoun } from "@/lib/prompts/imagePrompt";
 
 function id() {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -157,7 +158,6 @@ function stripParticle(word) {
 
 function toAsciiSlug(input, fallback = "user") {
   const s = String(input || "").trim();
-  // 간단 해시로 한글 등을 안전한 영문+숫자로 변환
   let hash = 5381;
   for (let i = 0; i < s.length; i += 1) {
     hash = (hash * 33) ^ s.charCodeAt(i);
@@ -199,146 +199,6 @@ function pickStableColor(seedStr) {
     "#34D399" // mint
   ];
   return pickStable(palette, seedStr);
-}
-
-function toEnglishNoun(kr) {
-  const k = String(kr || "").trim().replace(/\(.*?\)$/g, "");
-  if (!k) return "character";
-  const dict = {
-    햄스터: "hamster",
-    강아지: "puppy",
-    고양이: "cat",
-    고슴도치: "hedgehog",
-    공룡: "dinosaur",
-    개구리: "frog",
-    새: "bird",
-    오징어: "squid",
-    당나귀: "donkey",
-    아기: "baby",
-    사람: "person",
-    친구: "friend",
-    선인장: "cactus",
-    초콜릿: "chocolate",
-    피자: "pizza",
-    하트: "heart",
-    풍선: "balloon",
-    당고: "dango",
-    녹차: "matcha",
-    흙: "soil",
-    우산: "umbrella",
-    책: "book"
-  };
-  if (dict[k]) return dict[k];
-  if (/^[A-Za-z0-9 _-]+$/.test(k)) return k.trim();
-  return toAsciiSlug(k, "character");
-}
-
-function withArticle(nounPhrase) {
-  const n = String(nounPhrase || "").trim();
-  if (!n) return "A character";
-  const lower = n.toLowerCase();
-  const an = /^[aeiou]/.test(lower) || lower.startsWith("hour") || lower.startsWith("honest");
-  return `${an ? "An" : "A"} ${n}`;
-}
-
-function emotionEn(emotionKr) {
-  const m = {
-    행복: "happy",
-    설렘: "excited",
-    슬픔: "sad",
-    분노: "angry",
-    두려움: "scared",
-    놀람: "surprised",
-    감동: "touched",
-    지루함: "bored"
-  };
-  return m[emotionKr] || "excited";
-}
-
-function actionEn(actionKr) {
-  const m = {
-    "산책하기": "walking",
-    "주기": "giving",
-    "먹기": "eating",
-    "떨어뜨리기": "dropping",
-    "변신하기": "transforming",
-    "표현하기": "posing"
-  };
-  return m[actionKr] || "posing";
-}
-
-function buildImagePrompt({ character, emotion, action, props, fullText, seed }) {
-  // 주체 → 행동 → (소품). 조명·재질·배경·랜더 룩은 전부 lib/comfy/buildWorkflow.js CHROMA_* 고정 블록으로만 고정.
-  const noun = toEnglishNoun(character);
-  const subject = withArticle(noun);
-
-  const emo = emotionEn(emotion);
-  const act = actionEn(action);
-
-  const targetTransform =
-    String(fullText || "").match(/([A-Za-z0-9가-힣]+)됨/)?.[1] ||
-    String(fullText || "").match(/변신.*?([A-Za-z0-9가-힣]+)/)?.[1] ||
-    "";
-  const transformTo = targetTransform ? toEnglishNoun(targetTransform) : "";
-
-  const heldProp = (props || [])
-    .map((p) => String(p))
-    .find((p) => p && !p.includes("(날씨)") && !p.includes("(효과)") && !p.includes("(동반)"));
-  const heldPropEn = heldProp ? toEnglishNoun(heldProp.replace(/\(.*?\)/g, "")) : "";
-
-  const actionClause =
-    action === "주기" && heldPropEn
-      ? `is ${act} a ${heldPropEn} with a ${emo} expression`
-      : action === "먹기" && heldPropEn
-        ? `is ${act} a ${heldPropEn} with a ${emo} expression`
-        : action === "떨어뜨리기" && heldPropEn
-          ? `is ${act} a ${heldPropEn} with a ${emo} expression`
-          : action === "변신하기" && transformTo
-            ? `is ${act} into a ${transformTo}, with a ${emo} expression`
-            : `is ${act} with a ${emo} expression`;
-
-  const propBits = (props || [])
-    .map((p) => String(p))
-    .filter((p) => p && !/(날씨|효과)/.test(p))
-    .slice(0, 3)
-    .map((p) => toEnglishNoun(p.replace(/\(.*?\)/g, "")));
-  const propSuffix = propBits.length ? ` Featuring ${propBits.join(", ")}.` : "";
-
-  // +제목+표현어(한 단어)
-  const expressionWord = pickStable(
-    {
-      happy: ["Joy", "Gleam", "Cheer"],
-      excited: ["Spark", "Blush", "Bounce"],
-      sad: ["Gloom", "Sigh", "Drizzle"],
-      angry: ["Rage", "Blaze", "Stomp"],
-      scared: ["Shiver", "Eek", "Hush"],
-      surprised: ["Pop", "Whoa", "Zap"],
-      touched: ["Warmth", "Glow", "Heart"],
-      bored: ["Meh", "Yawn", "Dull"]
-    }[emo] || ["Spark", "Glow", "Pop"],
-    seed
-  );
-
-  const title = (() => {
-    const adj = pickStable(
-      {
-        happy: ["Smiling", "Sunny", "Bright"],
-        excited: ["Neon", "Glowing", "Sparkly"],
-        sad: ["Misty", "Quiet", "Blue"],
-        angry: ["Fiery", "Fierce", "Hot"],
-        scared: ["Shy", "Tiny", "Nervous"],
-        surprised: ["Popped", "Wide-eyed", "Sudden"],
-        touched: ["Warm", "Tender", "Soft"],
-        bored: ["Lazy", "Sleepy", "Plain"]
-      }[emo] || ["Glowing", "Neon", "Sparkly"],
-      seed
-    );
-    const base = noun.replace(/^\w/, (c) => c.toUpperCase());
-    return `${adj} ${base}`;
-  })();
-
-  const prompt = `${subject} ${actionClause}.${propSuffix}`;
-  return { prompt, title, expressionWord };
 }
 
 function emotionCode(kr) {

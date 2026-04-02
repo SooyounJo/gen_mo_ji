@@ -7,6 +7,8 @@ export default function GradientText({
   className = "",
   colors = ["#5227FF", "#FF9FFC", "#B19EEF"],
   animationSpeed = 8,
+  gradientScale = 300,
+  textWeight = 400,
   showBorder = false,
   direction = "horizontal",
   pauseOnHover = false,
@@ -80,7 +82,11 @@ export default function GradientText({
   const gradientStyle = {
     backgroundImage: `linear-gradient(${gradientAngle}, ${gradientColors})`,
     backgroundSize:
-      direction === "horizontal" ? "300% 100%" : direction === "vertical" ? "100% 300%" : "300% 300%",
+      direction === "horizontal"
+        ? `${gradientScale}% 100%`
+        : direction === "vertical"
+          ? `100% ${gradientScale}%`
+          : `${gradientScale}% ${gradientScale}%`,
     backgroundRepeat: "repeat"
   };
 
@@ -103,7 +109,7 @@ export default function GradientText({
       {...props}
     >
       {showBorder ? <motion.span className={styles.gradientOverlay} style={{ ...gradientStyle, backgroundPosition }} /> : null}
-      <motion.span className={styles.textContent} style={{ ...gradientStyle, backgroundPosition }}>
+      <motion.span className={styles.textContent} style={{ ...gradientStyle, backgroundPosition, fontWeight: textWeight }}>
         {children}
       </motion.span>
     </RootTag>

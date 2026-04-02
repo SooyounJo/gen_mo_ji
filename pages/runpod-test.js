@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import styles from "@/styles/ComfyTest.module.css";
+import styles from "@/styles/RunpodTest.module.css";
 import GradientText from "@/components/ui/GradientText";
+import Grainient from "@/components/ui/Grainient";
 
 function escapeRegExp(str) {
   return String(str || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -13,9 +14,58 @@ function uniq(arr) {
 function extractCandidates(text) {
   const s = String(text || "").trim();
   if (!s) return [];
-  const raw = s.match(/[A-Za-z0-9가-힣]{2,}/g) || [];
-  const stop = new Set(["그리고", "그런데", "하지만", "그래서", "저는", "나는", "너는", "우리는", "오늘", "진짜", "너무", "완전", "그냥"]);
-  return uniq(raw.filter((w) => !stop.has(w))).slice(0, 18);
+
+  const normalized = s.replace(/\s+/g, " ").trim();
+  const stop = new Set([
+    "그리고",
+    "그런데",
+    "하지만",
+    "그래서",
+    "저는",
+    "나는",
+    "너는",
+    "우리는",
+    "오늘",
+    "진짜",
+    "너무",
+    "완전",
+    "그냥"
+  ]);
+
+  // 1) 구/문장 스팬 우선 추출 (명사+동사/행동 사건)
+  const phrasePatterns = [
+    /[A-Za-z0-9가-힣]+(?:\s+[A-Za-z0-9가-힣]+){0,4}\s+(?:춤추는|먹는|마시는|주는|줬어|줬다|산책하는|달리는|뛰는|웃는|우는|변신하는|떨어뜨리는|보고있는)/g,
+    /[A-Za-z0-9가-힣]+(?:\s+[A-Za-z0-9가-힣]+){0,4}\s+(?:했어|했다|하고있어|하는중|됨|됐다|돼서|되어서)/g,
+    /[A-Za-z0-9가-힣]+(?:랑|과)\s+[A-Za-z0-9가-힣]+(?:\s+[A-Za-z0-9가-힣]+){0,3}/g
+  ];
+  const phraseCandidates = [];
+  for (const re of phrasePatterns) {
+    const hits = normalized.match(re) || [];
+    for (const h of hits) {
+      const t = String(h || "").trim();
+      if (t.length >= 4 && t.length <= 42) phraseCandidates.push(t);
+    }
+  }
+
+  // 2) fallback: 짧은 스팬(2~4단어 n-gram)
+  const words = normalized
+    .split(" ")
+    .map((w) => String(w || "").trim())
+    .filter((w) => w && !stop.has(w));
+  const shortSpans = [];
+  for (let n = 2; n <= 4; n += 1) {
+    for (let i = 0; i + n <= words.length; i += 1) {
+      const span = words.slice(i, i + n).join(" ").trim();
+      if (span.length >= 4 && span.length <= 24) shortSpans.push(span);
+    }
+  }
+
+  // 3) 단일 단어는 최소화해서 보조로만
+  const single = (normalized.match(/[A-Za-z0-9가-힣]{2,}/g) || [])
+    .filter((w) => !stop.has(w))
+    .slice(0, 2);
+
+  return uniq([...phraseCandidates, ...shortSpans, ...single]).slice(0, 12);
 }
 
 /** RunPod/ComfyUI 오류 문자열을 웹에 표시할 한국어로 정리 */
@@ -109,7 +159,7 @@ function pickRunpodFailureText(stData) {
   }
 }
 
-function HighlightText({ text, candidates, onPick }) {
+function HighlightText({ text, candidates, selectedTerm, onPick }) {
   const value = String(text || "");
   const list = (candidates || []).filter(Boolean);
   if (!value || list.length === 0) return value;
@@ -127,9 +177,23 @@ function HighlightText({ text, candidates, onPick }) {
 
   return parts.map((p, idx) => {
     if (!set.has(p)) return <span key={idx}>{p}</span>;
+    const isSelected = String(selectedTerm || "") === p;
     return (
-      <button key={idx} type="button" className={styles.termBtn} onClick={() => onPick(p)}>
-        <GradientText inline className={styles.termGradient} colors={["#5227FF", "#FF9FFC", "#B19EEF"]} animationSpeed={6} pauseOnHover>
+      <button
+        key={idx}
+        type="button"
+        className={`${styles.termBtn} ${isSelected ? styles.termBtnSelected : ""}`}
+        onClick={() => onPick(p)}
+      >
+        <GradientText
+          inline
+          className={styles.termGradient}
+          colors={["#6A3CFF", "#8B5CFF", "#FF8EEA", "#B19EEF", "#6A3CFF"]}
+          animationSpeed={3.8}
+          gradientScale={180}
+          textWeight={700}
+          pauseOnHover
+        >
           {p}
         </GradientText>
       </button>
@@ -155,6 +219,41 @@ export default function RunpodTestPage() {
 
   const candidates = useMemo(() => extractCandidates(text), [text]);
   const mainImage = images?.[0] || "";
+  const processLine = useMemo(() => {
+    if (status === "loading") {
+      const sec = elapsedMs ? `${Math.floor(elapsedMs / 1000)}초` : "0초";
+      const rp = runpodStatus ? ` / ${runpodStatus}` : "";
+      return `생성 중 ${sec}${rp}`;
+    }
+    if (status === "done") return "생성 완료";
+    if (status === "error") return "생성 실패";
+    return "대기 중";
+  }, [status, elapsedMs, runpodStatus]);
+
+  const errorDetail = useMemo(() => {
+    if (status !== "error") return "오류가 발생하면 이 영역에 상세 사유가 표시됩니다.";
+    return toKoreanRunpodMessage(error, hint);
+  }, [status, error, hint]);
+
+  useEffect(() => {
+    if (!selected) return;
+    if (!String(text || "").includes(selected)) {
+      setSelected("");
+    }
+  }, [text, selected]);
+
+  useEffect(() => {
+    // Debug: 어떤 하이라이트 후보가 나오는지(토큰/구문)
+    if (!text.trim()) return;
+    // eslint-disable-next-line no-console
+    console.log("[runpod-test] highlight candidates", { text, candidates });
+  }, [text, candidates]);
+
+  useEffect(() => {
+    // Debug: 현재 선택된 하이라이트
+    // eslint-disable-next-line no-console
+    console.log("[runpod-test] selected highlight", selected || "(none)");
+  }, [selected]);
 
   useEffect(() => {
     return () => {
@@ -210,6 +309,11 @@ export default function RunpodTestPage() {
     const promptEn = String(t).trim();
 
     try {
+      // eslint-disable-next-line no-console
+      console.log("[runpod-test] send generate", {
+        selected: t,
+        request: { prompt: promptEn, count: 2, width: 512, height: 512 }
+      });
       const runRes = await fetch("/api/runpod/run", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -218,14 +322,21 @@ export default function RunpodTestPage() {
           prompt: promptEn,
           count: 2,
           width: 512,
-          height: 512
+          height: 512,
+          includeResolvedPrompt: true
         })
       });
       const runData = await runRes.json().catch(() => ({}));
+      if (runData?.resolvedPrompt) {
+        // eslint-disable-next-line no-console
+        console.log("[runpod-test] resolved prompt (server)", runData.resolvedPrompt);
+      }
       if (!runRes.ok) throw new Error(runData?.detail || runData?.error || "RunPod run 실패");
       const id = String(runData?.id || "");
       if (!id) throw new Error("RunPod job id가 없습니다");
       setJobId(id);
+      // eslint-disable-next-line no-console
+      console.log("[runpod-test] run submitted", { id });
 
       const startedAt = Date.now();
       tickTimerRef.current = window.setInterval(() => {
@@ -246,6 +357,12 @@ export default function RunpodTestPage() {
 
           const st = String(stData?.status || "").toUpperCase();
           setRunpodStatus(st);
+          // eslint-disable-next-line no-console
+          console.log("[runpod-test] status poll", {
+            id,
+            status: st,
+            images: Array.isArray(stData?.images) ? stData.images.length : 0
+          });
           if (st === "COMPLETED") {
             const imgs = Array.isArray(stData?.images) ? stData.images.filter(Boolean) : [];
             if (imgs.length === 0) {
@@ -292,6 +409,8 @@ export default function RunpodTestPage() {
           const msg = String(e?.message || e);
           setError(msg);
           setHint(stRes != null && !stRes.ok ? "상태 조회 HTTP 오류 — 엔드포인트·작업 ID·네트워크를 확인하세요." : "");
+          // eslint-disable-next-line no-console
+          console.error("[runpod-test] status poll error", e);
           if (tickTimerRef.current) window.clearInterval(tickTimerRef.current);
         }
       };
@@ -301,108 +420,129 @@ export default function RunpodTestPage() {
       if (controller.signal.aborted) return;
       setStatus("error");
       setError(String(e?.message || e));
+      // eslint-disable-next-line no-console
+      console.error("[runpod-test] generate error", e);
       if (tickTimerRef.current) window.clearInterval(tickTimerRef.current);
     }
   }
 
   return (
     <main className={styles.page}>
-      <div className={styles.shell}>
+      <div className={styles.backgroundLayer}>
+        <Grainient
+          color1="#FF9FFC"
+          color2="#5227FF"
+          color3="#B19EEF"
+          timeSpeed={0.25}
+          colorBalance={0}
+          warpStrength={1}
+          warpFrequency={5}
+          warpSpeed={2}
+          warpAmplitude={50}
+          blendAngle={0}
+          blendSoftness={0.05}
+          rotationAmount={500}
+          noiseScale={2}
+          grainAmount={0.1}
+          grainScale={2}
+          grainAnimated={false}
+          contrast={1.5}
+          gamma={1}
+          saturation={1}
+          centerX={0}
+          centerY={0}
+          zoom={0.9}
+        />
+      </div>
+      <div className={styles.appShell}>
         <header className={styles.header}>
-          <div className={styles.title}>RunPod 고정 URL 테스트</div>
-          <div className={styles.sub}>Serverless Endpoint(/run + /status) 결과가 여기로 표시됩니다</div>
+          <div>
+            <div className={styles.title}>RunPod 고정 URL 테스트</div>
+          </div>
         </header>
 
-        <section className={styles.inputSection}>
-          <div style={{ marginBottom: 10 }}>
-            <label className={styles.label} style={{ margin: 0 }}>
-              텍스트
-            </label>
-            <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>
-              서버 설정에 따라 RunPod로 <code>prompt</code>만 보내거나(<code>RUNPOD_INPUT_PROMPT_ONLY=1</code>),{" "}
-              <code>prompt</code>+Comfy API용 <code>workflow</code>를 같이 보냅니다. 워크플로 템플릿 파일은{" "}
-              <code>z image_v4.json</code> 하나만 씁니다.
-            </div>
-          </div>
-          <textarea
-            className={styles.textarea}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            rows={3}
-            placeholder="예: 춤추는 고양이는 행복해보였어"
-            spellCheck={false}
-          />
+        <div className={styles.columns}>
+          <section className={styles.leftPanel}>
+            <div className={styles.panelTitle}>Task</div>
 
-          <div className={styles.previewLabel}>하이라이트 (클릭)</div>
-          <div className={styles.previewBox} aria-label="하이라이트 프리뷰">
-            <HighlightText text={text} candidates={candidates} onPick={generate} />
-          </div>
-        </section>
+            <label className={styles.label}>텍스트</label>
+            <textarea
+              className={styles.textarea}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              rows={4}
+              placeholder="예: 춤추는 개구리"
+              spellCheck={false}
+            />
 
-        <section className={styles.resultSection}>
-          <div className={styles.resultMeta}>
-            <div className={styles.metaLine}>
-              <span className={styles.metaKey}>선택</span>
-              <span className={styles.metaVal}>{selected || "-"}</span>
+            <div className={styles.previewLabel}>하이라이트 (클릭)</div>
+            <div className={styles.previewBox} aria-label="하이라이트 프리뷰">
+              <HighlightText text={text} candidates={candidates} selectedTerm={selected} onPick={setSelected} />
             </div>
-            <div className={styles.metaLine}>
-              <span className={styles.metaKey}>상태</span>
-              <span className={styles.metaVal}>
-                {status === "loading" ? "생성 중" : status === "error" ? "에러" : "—"}
-              </span>
-            </div>
-            <div className={styles.metaLine}>
-              <span className={styles.metaKey}>job_id</span>
-              <span className={styles.metaVal}>{jobId || "-"}</span>
-            </div>
-          </div>
 
-          {status === "error" && error ? (
-            <div className={styles.errorBox} style={{ whiteSpace: "pre-wrap" }}>
-              {toKoreanRunpodMessage(error, hint)}
-              <div style={{ height: 12 }} />
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button
+              type="button"
+              className={styles.sendBtn}
+              onClick={() => generate(selected)}
+              disabled={status === "loading" || !String(selected || "").trim()}
+            >
+              Send
+            </button>
+
+            <div className={styles.metaCard}>
+              <div className={styles.metaLine}>
+                <span className={styles.metaKey}>선택</span>
+                <span className={styles.metaVal}>{selected || "-"}</span>
+              </div>
+              <div className={styles.metaLine}>
+                <span className={styles.metaKey}>상태</span>
+                <span className={styles.metaVal}>{status === "loading" ? "생성 중" : status === "error" ? "에러" : status === "done" ? "완료" : "대기"}</span>
+              </div>
+              <div className={styles.metaLine}>
+                <span className={styles.metaKey}>job_id</span>
+                <span className={styles.metaVal}>{jobId || "-"}</span>
+              </div>
+              {!!elapsedMs && status === "loading" ? (
+                <div className={styles.metaLine}>
+                  <span className={styles.metaKey}>경과</span>
+                  <span className={styles.metaVal}>{Math.floor(elapsedMs / 1000)}초</span>
+                </div>
+              ) : null}
+            </div>
+
+            <div className={styles.errorPanel}>
+              <div className={styles.errorPanelTitle}>오류/상세</div>
+              <div className={styles.errorPanelText}>{errorDetail}</div>
+            </div>
+
+            <div className={styles.actionRow}>
+              {status === "error" ? (
                 <button type="button" onClick={retry} disabled={!lastTermRef.current}>
                   다시 시도
                 </button>
+              ) : null}
+              {status === "loading" || status === "error" ? (
                 <button type="button" onClick={cancel}>
                   취소
                 </button>
-              </div>
+              ) : null}
             </div>
-          ) : null}
+          </section>
 
-          <div className={styles.canvas} aria-label="생성 이미지">
-            {status === "loading" ? (
-              <div className={styles.loadingCard}>
-                생성 중…
-                {elapsedMs ? (
-                  <div style={{ marginTop: 8, opacity: 0.85, fontSize: 13 }}>{Math.floor(elapsedMs / 1000)}초 경과</div>
-                ) : null}
-                {runpodStatus ? (
-                  <div style={{ marginTop: 6, opacity: 0.75, fontSize: 12 }}>RunPod: {runpodStatus}</div>
-                ) : null}
-                <div style={{ marginTop: 10, display: "flex", justifyContent: "center" }}>
-                  <button type="button" onClick={cancel}>
-                    취소
-                  </button>
+          <section className={styles.rightPanel}>
+            <div className={styles.panelTitle}>Result</div>
+            <div className={styles.processLine}>{processLine}</div>
+            <div className={styles.canvas} aria-label="생성 이미지">
+              {mainImage ? (
+                <div className={styles.alphaImgWrap}>
+                  <img className={styles.mainImg} src={mainImage} alt="generated" />
                 </div>
-                {hint ? (
-                  <>
-                    <div style={{ height: 10 }} />
-                    <div style={{ opacity: 0.9, fontSize: 13, lineHeight: 1.45 }}>{hint}</div>
-                  </>
-                ) : null}
-              </div>
-            ) : null}
-            {status !== "loading" && mainImage ? (
-              <div className={styles.alphaImgWrap}>
-                <img className={styles.mainImg} src={mainImage} alt="generated" />
-              </div>
-            ) : null}
-            {status !== "loading" && !mainImage ? <div className={styles.emptyCard}>이미지가 여기에 표시됩니다</div> : null}
-          </div>
-        </section>
+              ) : (
+                <div className={styles.emptyImageState}>이미지 대기 중</div>
+              )}
+            </div>
+          </section>
+        </div>
       </div>
     </main>
   );

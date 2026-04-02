@@ -1,0 +1,338 @@
+.page {
+  height: 100vh;
+  overflow: hidden;
+  padding: 0;
+  background: #ffffff;
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+.backgroundLayer {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.appShell {
+  width: min(1200px, 86vw);
+  height: min(700px, 82vh);
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  background: rgba(255, 255, 255, 0.52);
+  box-shadow: 0 22px 65px rgba(31, 38, 135, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(14px) saturate(125%);
+  -webkit-backdrop-filter: blur(14px) saturate(125%);
+  padding: 12px;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 12px;
+  position: relative;
+  z-index: 1;
+}
+
+.header {
+  padding: 2px 2px 6px;
+}
+
+.title {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.sub {
+  margin-top: 6px;
+  font-size: 12px;
+  color: rgba(17, 24, 39, 0.7);
+}
+
+.columns {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(520px, 1fr) minmax(300px, 420px);
+  gap: 10px;
+  align-items: stretch;
+}
+
+.leftPanel,
+.rightPanel {
+  min-height: 0;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.38);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.44), 0 10px 25px rgba(31, 38, 135, 0.09);
+  backdrop-filter: blur(10px) saturate(120%);
+  -webkit-backdrop-filter: blur(10px) saturate(120%);
+  padding: 10px;
+  height: 100%;
+}
+
+.leftPanel {
+  display: grid;
+  grid-template-rows: auto auto auto auto auto auto auto 1fr auto;
+  gap: 10px;
+}
+
+.rightPanel {
+  display: grid;
+  grid-template-rows: auto auto auto;
+  gap: 10px;
+  width: 100%;
+  justify-self: stretch;
+}
+
+.panelTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(17, 24, 39, 0.88);
+}
+
+.helpText {
+  font-size: 12px;
+  color: rgba(17, 24, 39, 0.7);
+  line-height: 1.45;
+}
+
+.label {
+  display: block;
+  font-size: 12px;
+  color: rgba(17, 24, 39, 0.75);
+}
+
+.textarea {
+  width: 100%;
+  border: 1px solid rgba(17, 24, 39, 0.12);
+  border-radius: 12px;
+  padding: 10px;
+  font-size: 13px;
+  outline: none;
+  resize: none;
+  background: #fff;
+}
+
+.textarea:focus {
+  border-color: rgba(82, 39, 255, 0.45);
+  box-shadow: 0 0 0 4px rgba(82, 39, 255, 0.14);
+}
+
+.previewLabel {
+  font-size: 12px;
+  color: rgba(17, 24, 39, 0.75);
+}
+
+.previewBox {
+  min-height: 56px;
+  border-radius: 12px;
+  border: 1px dashed rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.92);
+  padding: 10px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.termBtn {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  display: inline;
+  font: inherit;
+}
+
+.termBtnSelected {
+  border-radius: 8px;
+  background: rgba(82, 39, 255, 0.1);
+  box-shadow: inset 0 0 0 1px rgba(82, 39, 255, 0.22);
+}
+
+.termGradient:hover {
+  text-decoration: underline;
+}
+
+.termGradient {
+  filter: drop-shadow(0 0 4px rgba(138, 92, 255, 0.45)) drop-shadow(0 0 10px rgba(255, 142, 234, 0.3));
+}
+
+.sendBtn {
+  height: 34px;
+  border-radius: 8px;
+  font-size: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: linear-gradient(135deg, #0b0b12 0%, #231043 38%, #5227ff 100%);
+  color: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 12px 26px rgba(18, 7, 33, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  cursor: pointer;
+}
+
+.sendBtn:hover:enabled {
+  filter: brightness(1.06) saturate(1.08);
+}
+
+.sendBtn:active:enabled {
+  transform: translateY(1px);
+}
+
+.sendBtn:disabled {
+  background: rgba(17, 24, 39, 0.22);
+  color: rgba(255, 255, 255, 0.55);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.metaCard {
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 12px;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.32);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.38);
+}
+
+.metaLine {
+  display: grid;
+  grid-template-columns: 54px 1fr;
+  gap: 8px;
+  align-items: baseline;
+  margin-bottom: 6px;
+}
+
+.metaLine:last-child {
+  margin-bottom: 0;
+}
+
+.metaKey {
+  font-size: 12px;
+  color: rgba(17, 24, 39, 0.7);
+}
+
+.metaVal {
+  font-size: 12px;
+  color: rgba(17, 24, 39, 0.92);
+  word-break: break-all;
+}
+
+.actionRow {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.canvas {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  max-width: 400px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.28);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  justify-self: center;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.48);
+}
+
+.processLine {
+  font-size: 12px;
+  color: rgba(17, 24, 39, 0.72);
+}
+
+.emptyImageState {
+  width: min(220px, 74%);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.44);
+  padding: 10px;
+  text-align: center;
+  font-size: 12px;
+  color: rgba(17, 24, 39, 0.65);
+}
+
+.alphaImgWrap {
+  width: 100%;
+  height: 100%;
+  background-color: rgba(255, 255, 255, 0.16);
+}
+
+.mainImg {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.reasonCard {
+  width: min(420px, 92%);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.44);
+  padding: 10px 12px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.46);
+}
+
+.reasonTitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(17, 24, 39, 0.9);
+}
+
+.reasonText {
+  margin-top: 8px;
+  white-space: pre-wrap;
+  font-size: 12px;
+  line-height: 1.45;
+  color: rgba(17, 24, 39, 0.75);
+}
+
+.errorPanel {
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.86);
+  padding: 10px;
+  min-height: 86px;
+}
+
+.errorPanelTitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(17, 24, 39, 0.82);
+}
+
+.errorPanelText {
+  margin-top: 6px;
+  white-space: pre-wrap;
+  font-size: 12px;
+  line-height: 1.4;
+  color: rgba(17, 24, 39, 0.7);
+}
+
+@media (max-width: 980px) {
+  .page {
+    height: auto;
+    min-height: 100vh;
+    overflow: auto;
+    padding: 12px;
+    display: block;
+  }
+
+  .appShell {
+    width: 100%;
+    height: auto;
+    min-height: calc(100vh - 24px);
+  }
+
+  .columns {
+    grid-template-columns: 1fr;
+  }
+
+  .rightPanel {
+    width: 100%;
+    justify-self: stretch;
+  }
+
+  .canvas {
+    min-height: 0;
+  }
+}
+
