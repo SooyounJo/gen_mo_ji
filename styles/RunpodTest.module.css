@@ -70,7 +70,7 @@
 
 .leftPanel {
   display: grid;
-  grid-template-rows: auto auto auto auto auto auto auto 1fr auto;
+  grid-template-rows: auto auto auto auto auto auto auto auto 1fr auto;
   gap: 10px;
 }
 
@@ -238,6 +238,55 @@
   word-break: break-all;
 }
 
+.promptPreviewCard {
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 12px;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.32);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.38);
+}
+
+.promptPreviewTitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(17, 24, 39, 0.9);
+  margin-bottom: 8px;
+}
+
+.promptPreviewLine {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.promptPreviewLine + .promptPreviewLine {
+  margin-top: 6px;
+}
+
+.promptPreviewKey {
+  font-size: 12px;
+  color: rgba(17, 24, 39, 0.7);
+}
+
+.promptPreviewVal {
+  font-size: 12px;
+  color: rgba(17, 24, 39, 0.92);
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+.promptPreviewMono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.promptPreviewNote {
+  margin-top: 8px;
+  font-size: 12px;
+  color: rgba(17, 24, 39, 0.72);
+  line-height: 1.4;
+}
+
 .actionRow {
   display: flex;
   gap: 8px;
@@ -370,6 +419,48 @@
   font-size: 12px;
   line-height: 1.4;
   color: rgba(17, 24, 39, 0.7);
+}
+
+.debugPanel {
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.86);
+  padding: 10px;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.debugPanelTitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(17, 24, 39, 0.82);
+}
+
+.debugPanelText {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: rgba(17, 24, 39, 0.7);
+}
+
+.debugBlockTitle {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(17, 24, 39, 0.72);
+  margin: 6px 0 4px;
+}
+
+.debugPre {
+  margin: 0;
+  padding: 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(17, 24, 39, 0.1);
+  background: rgba(255, 255, 255, 0.8);
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 11px;
+  line-height: 1.35;
 }
 
 @media (max-width: 980px) {

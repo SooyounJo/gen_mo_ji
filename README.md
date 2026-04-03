@@ -31,7 +31,7 @@ yarn dev
 - **ComfyUI HTTP**: `COMFYUI_BASE_URL` 로 원격 ComfyUI에 직접 연결해서 생성합니다.
   - API: `POST /api/comfy/generate`
   - 테스트 UI: `pages/runpod-test.js` (이름은 legacy지만 현재는 ComfyUI 테스트 페이지로 사용)
-- **워크플로 JSON 템플릿**: 루트 **`0403_ccdD_gen moji-z_image+WAN_S-E_API.json`** 하나만 사용합니다 (`lib/comfy/buildWorkflow.js`의 `WORKFLOW_TEMPLATE_FILE`).
+- **워크플로 JSON 템플릿**: 루트 **`genmo0404.json`** 하나만 사용합니다 (`lib/comfy/buildWorkflow.js`의 `WORKFLOW_TEMPLATE_FILE`).
 - `/api/comfy/generate` 응답은 **`images: string[]`(data URL)** + **`videoUrl: string`(프록시 URL)** 을 포함할 수 있습니다.
 
 ## RunPod Serverless + ComfyUI (레거시)

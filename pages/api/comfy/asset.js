@@ -2,21 +2,13 @@ function json(res, status, data) {
   res.status(status).json(data);
 }
 
-async function proxyViewAsBinary({ baseUrl, filename, subfolder = "", type = "output" }) {
+function buildViewUrl({ baseUrl, filename, subfolder = "", type = "output" }) {
   const qs = new URLSearchParams({
     filename: String(filename || ""),
     subfolder: String(subfolder || ""),
     type: String(type || "output")
   });
-  const url = `${String(baseUrl).replace(/\/+$/, "")}/view?${qs.toString()}`;
-  const res = await fetch(url, { method: "GET" });
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`ComfyUI /view failed: HTTP ${res.status} ${res.statusText}${text ? ` | ${text}` : ""}`);
-  }
-  const ab = await res.arrayBuffer();
-  const ct = res.headers.get("content-type") || "application/octet-stream";
-  return { ct, ab };
+  return `${String(baseUrl).replace(/\/+$/, "")}/view?${qs.toString()}`;
 }
 
 export default async function handler(req, res) {
@@ -36,10 +28,42 @@ export default async function handler(req, res) {
   if (!filename) return json(res, 400, { error: "filename is required" });
 
   try {
-    const { ct, ab } = await proxyViewAsBinary({ baseUrl, filename, subfolder, type });
+    const url = buildViewUrl({ baseUrl, filename, subfolder, type });
+    const range = typeof req.headers.range === "string" ? req.headers.range : "";
+
+    const upstream = await fetch(url, {
+      method: "GET",
+      headers: {
+        ...(range ? { range } : {})
+      }
+    });
+
+    // Pass through status (200/206/404...)
+    res.status(upstream.status);
     res.setHeader("cache-control", "no-store, max-age=0");
-    res.setHeader("content-type", ct);
-    res.status(200).send(Buffer.from(ab));
+
+    // Pass through important headers for media playback.
+    const pass = ["content-type", "content-length", "content-range", "accept-ranges"];
+    for (const key of pass) {
+      const v = upstream.headers.get(key);
+      if (v) res.setHeader(key, v);
+    }
+
+    if (!upstream.ok) {
+      const text = await upstream.text().catch(() => "");
+      return json(res, upstream.status, {
+        error: "ComfyUI asset proxy failed",
+        detail: `Upstream HTTP ${upstream.status} at ${url}${text ? ` | ${text.slice(0, 500)}` : ""}`
+      });
+    }
+
+    if (!upstream.body) {
+      return json(res, 502, { error: "ComfyUI asset proxy failed", detail: "Upstream body is empty" });
+    }
+
+    // Stream body to client (supports large videos).
+    const { Readable } = await import("node:stream");
+    Readable.fromWeb(upstream.body).pipe(res);
   } catch (e) {
     return json(res, 502, { error: "ComfyUI asset proxy failed", detail: String(e?.message || e) });
   }

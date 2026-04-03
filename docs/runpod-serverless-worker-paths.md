@@ -2,7 +2,7 @@
 
 ## Next.js API (`/api/runpod/run`)
 
-워크플로를 실어 보낼 때: **`input.prompt`** + **`input.workflow`** — 템플릿은 루트 **`0403_ccdD_gen moji-z_image+WAN_S-E_API.json`** (`lib/comfy/buildWorkflow.js`의 `WORKFLOW_TEMPLATE_FILE`).
+워크플로를 실어 보낼 때: **`input.prompt`** + **`input.workflow`** — 템플릿은 루트 **`genmo0404.json`** (`lib/comfy/buildWorkflow.js`의 `WORKFLOW_TEMPLATE_FILE`).
 
 prompt 만 받는 핸들러: `.env.local`에 **`RUNPOD_INPUT_PROMPT_ONLY=1`**
 
@@ -13,7 +13,7 @@ prompt 만 받는 핸들러: `.env.local`에 **`RUNPOD_INPUT_PROMPT_ONLY=1`**
 
 ---
 
-**로컬/원격 ComfyUI** (`/api/comfy/generate`)도 같은 **`0403_ccdD_gen moji-z_image+WAN_S-E_API.json`** 템플릿을 사용합니다. **RunPod Serverless Handler** 스캔 경로와 실제 ComfyUI 설치 경로가 다르면 `not in []`, `value_not_in_list` 등으로 실패할 수 있습니다.
+**로컬/원격 ComfyUI** (`/api/comfy/generate`)도 같은 **`genmo0404.json`** 템플릿을 사용합니다. **RunPod Serverless Handler** 스캔 경로와 실제 ComfyUI 설치 경로가 다르면 `not in []`, `value_not_in_list` 등으로 실패할 수 있습니다.
 
 ## Handler가 보통 스캔하는 경로
 

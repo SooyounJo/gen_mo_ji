@@ -38,7 +38,10 @@ function extractCandidates(text) {
     "정말"
   ]);
 
-  const filtered = raw.filter((w) => !stop.has(w));
+  const filtered = raw
+    .filter((w) => !stop.has(w))
+    // 내부 캐릭터 ID(예: character-rcr001)는 프롬프트 후보에서 제외
+    .filter((w) => !isInternalCharacterId(w));
 
   // "구/절" 후보(수식/원인/결과가 있는 표현)
   const clauseCandidates = [];
@@ -121,7 +124,8 @@ function extractCandidates(text) {
       ? bestTokens.filter((t) => !phrases.some((p) => p.includes(t)))
       : bestTokens;
 
-  const merged = uniq([...phrases, ...became, ...tokens]);
+  // 내부 캐릭터 ID가 포함된 스팬도 제거 (예: "character-rcr001 ...")
+  const merged = uniq([...phrases, ...became, ...tokens]).filter((x) => !/character-[a-z0-9]+/i.test(String(x || "")));
   if (merged.length) return merged.slice(0, 8);
 
   return uniq(
@@ -320,13 +324,87 @@ function appearanceFromCharacter({ character, emotion, action, fullText, props, 
   return `${base}, ${palette}, ${expression}, ${actionHint}, ${feature}`;
 }
 
+function simpleComfyPromptKr({ character, emotion, fallback }) {
+  const cKr = String(character || "").replace(/\s+/g, " ").trim();
+  const eKr = String(emotion || "").trim();
+  const fb = String(fallback || "").replace(/\s+/g, " ").trim();
+
+  const adjective = (() => {
+    const m = {
+      행복: "행복한",
+      설렘: "설레는",
+      슬픔: "슬픈",
+      분노: "화난",
+      두려움: "겁먹은",
+      놀람: "놀란",
+      감동: "감동한",
+      지루함: "지루한",
+      neutral: ""
+    };
+    return m[eKr] || "";
+  })();
+
+  const subject = cKr || fb || "캐릭터";
+  const out = `${adjective ? `${adjective} ` : ""}${subject}`.replace(/\s+/g, " ").trim();
+  return out || "캐릭터";
+}
+
+function isInternalCharacterId(s) {
+  const t = String(s || "").trim();
+  return /^character-[a-z0-9]+$/i.test(t);
+}
+
+function deriveFallbackFromContext(ctx) {
+  const t = String(ctx || "")
+    .replace(/\s+/g, " ")
+    .replace(/character-[a-z0-9]+/gi, " ")
+    .trim();
+  if (!t) return "";
+
+  const candidates = [
+    "쥐",
+    "두더지",
+    "햄스터",
+    "강아지",
+    "고양이",
+    "새",
+    "선인장",
+    "당나귀",
+    "오징어",
+    "아기",
+    "공룡",
+    "개구리",
+    "사람",
+    "친구",
+    "초콜릿",
+    "피자",
+    "하트",
+    "풍선",
+    "당고",
+    "녹차",
+    "흙",
+    "우산",
+    "책"
+  ];
+  for (const c of candidates) {
+    if (t.includes(c)) return c;
+  }
+
+  const tokens = t.match(/[A-Za-z0-9가-힣]{2,}/g) || [];
+  return tokens.slice(-3).join(" ");
+}
+
 function analyzeSelection(selected, contextText, nickname) {
   const s = String(selected || "").replace(/\s+/g, " ").trim();
   const ctx = String(contextText || "");
 
-  const emotion = inferEmotionFromText(ctx + " " + s);
+  // 선택된 토큰이 내부 캐릭터 ID(예: character-rcr001)일 수 있어,
+  // 프롬프트/분석에는 섞지 않고 실제 문장(contextText)에서만 해석합니다.
+  const selectedMeaningful = isInternalCharacterId(s) ? "" : s;
 
-  const fullText = `${ctx} ${s}`.replace(/\s+/g, " ").trim();
+  const emotion = inferEmotionFromText(ctx + " " + selectedMeaningful);
+
+  const fullText = `${ctx} ${selectedMeaningful}`.replace(/\s+/g, " ").trim();
   const action =
     /(산책)/.test(fullText)
       ? "산책하기"
@@ -357,6 +435,7 @@ function analyzeSelection(selected, contextText, nickname) {
   if (!character) {
     // 동물/인간 우선
     const animalsHumans = [
+      "쥐",
       "햄스터",
       "강아지",
       "고양이",
@@ -456,6 +535,15 @@ function analyzeSelection(selected, contextText, nickname) {
     seed: `${nickname}|${contextText}|${selected}`
   });
 
+  // ComfyUI로는 스타일/룩을 보내지 않고 "짧은 내용 프롬프트"만 전송합니다.
+  // 예: "행복한 고양이"
+  const comfyPrompt = simpleComfyPromptKr({
+    character,
+    emotion,
+    // 내부 ID는 절대 fallback으로 쓰지 않음
+    fallback: selectedMeaningful || deriveFallbackFromContext(ctx) || ""
+  });
+
   const charName = (nickname || "00").trim() || "00";
   const saveName = [
     toAsciiSlug(charName, "user"),
@@ -471,7 +559,8 @@ function analyzeSelection(selected, contextText, nickname) {
     appearance,
     props,
     saveName,
-    imagePrompt: promptPack.prompt,
+    comfyPrompt,
+    imagePrompt: comfyPrompt,
     title: promptPack.title,
     expressionWord: promptPack.expressionWord
   };
@@ -544,6 +633,8 @@ export function useTextLogic() {
   const [draftPreviewIndex, setDraftPreviewIndex] = useState(0);
   const [draftPreviewImages, setDraftPreviewImages] = useState([]);
   const [draftPreviewVideoUrl, setDraftPreviewVideoUrl] = useState("");
+  const [draftPromptRequest, setDraftPromptRequest] = useState("");
+  const [draftPromptSent, setDraftPromptSent] = useState("");
   const [draftGenerateStatus, setDraftGenerateStatus] = useState("idle"); // idle | loading | done | error
   const [draftGenerateError, setDraftGenerateError] = useState("");
   const [timeline, setTimeline] = useState(() => []);
@@ -594,6 +685,8 @@ export function useTextLogic() {
       if (genTimerRef.current) window.clearTimeout(genTimerRef.current);
       setDraftPreviewImages([]);
       setDraftPreviewVideoUrl("");
+      setDraftPromptRequest("");
+      setDraftPromptSent("");
       setDraftGenerateStatus("idle");
       setDraftGenerateError("");
       return;
@@ -607,27 +700,16 @@ export function useTextLogic() {
     const seq = (genSeqRef.current += 1);
     setDraftGenerateStatus("loading");
     setDraftGenerateError("");
+    setDraftPromptSent("");
 
     genTimerRef.current = window.setTimeout(async () => {
       try {
         const analysis = analyzeSelection(term, text, nickname);
-        const motion =
-          analysis.action === "산책하기"
-            ? "walking"
-            : analysis.action === "주기"
-              ? "giving"
-              : analysis.action === "먹기"
-                ? "eating"
-                : analysis.action === "떨어뜨리기"
-                  ? "dropping"
-                  : analysis.action === "변신하기"
-                    ? "transforming"
-                    : "posing";
         // eslint-disable-next-line no-console
         console.log("[comfy] ai interpretation (analysis)", analysis);
+        setDraftPromptRequest(String(analysis?.imagePrompt || ""));
         const payload = {
           prompt: analysis.imagePrompt,
-          motion,
           width: 1024,
           height: 1024,
           count: 2
@@ -646,6 +728,7 @@ export function useTextLogic() {
         const imgs = Array.isArray(data?.images) ? data.images.filter(Boolean) : [];
         setDraftPreviewImages(imgs.slice(0, 2));
         setDraftPreviewVideoUrl(String(data?.videoUrl || ""));
+        setDraftPromptSent(String(data?.meta?.promptSent || ""));
         // eslint-disable-next-line no-console
         console.log("[comfy] response <- /api/comfy/generate", {
           images: Array.isArray(data?.images) ? data.images.length : 0,
@@ -658,6 +741,7 @@ export function useTextLogic() {
         if (seq !== genSeqRef.current) return;
         setDraftPreviewImages([]);
         setDraftPreviewVideoUrl("");
+        setDraftPromptSent("");
         setDraftGenerateStatus("error");
         setDraftGenerateError(String(e?.message || e));
       }
@@ -871,6 +955,8 @@ export function useTextLogic() {
     draftPreviewColors,
     draftPreviewImages,
     draftPreviewVideoUrl,
+    draftPromptRequest,
+    draftPromptSent,
     draftGenerateStatus,
     draftGenerateError,
     draftPreviewIndex,

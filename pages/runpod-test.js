@@ -2,6 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import styles from "@/styles/RunpodTest.module.css";
 import GradientText from "@/components/ui/GradientText";
 import Grainient from "@/components/ui/Grainient";
+function looksKorean(s) {
+  return /[가-힣]/.test(String(s || ""));
+}
 
 function escapeRegExp(str) {
   return String(str || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -51,7 +54,9 @@ function extractCandidates(text) {
   const words = normalized
     .split(" ")
     .map((w) => String(w || "").trim())
-    .filter((w) => w && !stop.has(w));
+    .filter((w) => w && !stop.has(w))
+    // 내부 캐릭터 ID(예: character-rcr001)는 후보에서 제거
+    .filter((w) => !/^character-[a-z0-9]+$/i.test(w));
   const shortSpans = [];
   for (let n = 2; n <= 4; n += 1) {
     for (let i = 0; i + n <= words.length; i += 1) {
@@ -63,9 +68,12 @@ function extractCandidates(text) {
   // 3) 단일 단어는 최소화해서 보조로만
   const single = (normalized.match(/[A-Za-z0-9가-힣]{2,}/g) || [])
     .filter((w) => !stop.has(w))
+    .filter((w) => !/^character-[a-z0-9]+$/i.test(w))
     .slice(0, 2);
 
-  return uniq([...phraseCandidates, ...shortSpans, ...single]).slice(0, 12);
+  return uniq([...phraseCandidates, ...shortSpans, ...single])
+    .filter((x) => !/character-[a-z0-9]+/i.test(String(x || "")))
+    .slice(0, 12);
 }
 
 /** RunPod/ComfyUI 오류 문자열을 웹에 표시할 한국어로 정리 */
@@ -220,12 +228,41 @@ export default function RunpodTestPage() {
   const [count, setCount] = useState(2);
   const [elapsedMs, setElapsedMs] = useState(0);
   const [totalMs, setTotalMs] = useState(0);
+  const [debugRequest, setDebugRequest] = useState(null);
+  const [debugResponse, setDebugResponse] = useState(null);
+  const [promptPreviewMeta, setPromptPreviewMeta] = useState(null);
+  const [promptPreviewLoading, setPromptPreviewLoading] = useState(false);
+  const [promptPreviewError, setPromptPreviewError] = useState("");
   const abortRef = useRef(null);
+  const previewAbortRef = useRef(null);
+  const previewTimerRef = useRef(null);
   const lastTermRef = useRef("");
   const startedAtRef = useRef(0);
   const tickTimerRef = useRef(null);
 
   const candidates = useMemo(() => extractCandidates(text), [text]);
+  const promptPreview = useMemo(() => {
+    const t = String(selected || "").trim();
+    const internal = /^character-[a-z0-9]+$/i.test(t);
+    const requestPrompt = t;
+    const sentFromRun = String(debugResponse?.meta?.promptSent || "");
+    const comfyEn = sentFromRun || String(promptPreviewMeta?.promptSent || "");
+    const translated = Boolean(debugResponse?.meta?.translated ?? promptPreviewMeta?.translated);
+
+    return {
+      internal,
+      requestPrompt,
+      comfyEn,
+      translated,
+      note: !t
+        ? ""
+        : internal
+          ? "내부 캐릭터 ID(character-...)는 프롬프트로 전송되지 않도록 차단됩니다."
+          : looksKorean(t) && !promptPreviewMeta && !sentFromRun
+            ? "아래 'Comfy 전송(영어)'는 서버 미리보기로 채워집니다."
+            : ""
+    };
+  }, [selected, debugResponse, promptPreviewMeta]);
   const processLine = useMemo(() => {
     if (status === "loading") {
       return "생성 중…";
@@ -284,6 +321,52 @@ export default function RunpodTestPage() {
   }, [selected]);
 
   useEffect(() => {
+    const t = String(selected || "").trim();
+    if (previewTimerRef.current) window.clearTimeout(previewTimerRef.current);
+    if (previewAbortRef.current) previewAbortRef.current.abort();
+
+    if (!t || /^character-[a-z0-9]+$/i.test(t)) {
+      setPromptPreviewMeta(null);
+      setPromptPreviewLoading(false);
+      setPromptPreviewError("");
+      return undefined;
+    }
+
+    setPromptPreviewLoading(true);
+    setPromptPreviewError("");
+
+    previewTimerRef.current = window.setTimeout(() => {
+      const controller = new AbortController();
+      previewAbortRef.current = controller;
+      (async () => {
+        try {
+          const res = await fetch("/api/comfy/prompt-preview", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            signal: controller.signal,
+            body: JSON.stringify({ prompt: t })
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data?.detail || data?.error || "프롬프트 미리보기 실패");
+          setPromptPreviewMeta(data?.meta || null);
+          setPromptPreviewError("");
+        } catch (e) {
+          if (controller.signal.aborted) return;
+          setPromptPreviewMeta(null);
+          setPromptPreviewError(String(e?.message || e));
+        } finally {
+          if (!controller.signal.aborted) setPromptPreviewLoading(false);
+        }
+      })();
+    }, 320);
+
+    return () => {
+      if (previewTimerRef.current) window.clearTimeout(previewTimerRef.current);
+      previewAbortRef.current?.abort();
+    };
+  }, [selected]);
+
+  useEffect(() => {
     return () => {
       if (abortRef.current) abortRef.current.abort();
       if (tickTimerRef.current) window.clearInterval(tickTimerRef.current);
@@ -300,6 +383,8 @@ export default function RunpodTestPage() {
     setVideoUrl("");
     setElapsedMs(0);
     setTotalMs(0);
+    setDebugRequest(null);
+    setDebugResponse(null);
   }
 
   function retry() {
@@ -321,13 +406,19 @@ export default function RunpodTestPage() {
     setVideoUrl("");
     setElapsedMs(0);
     setTotalMs(0);
+    setDebugRequest(null);
+    setDebugResponse(null);
 
     if (abortRef.current) abortRef.current.abort();
     const controller = new AbortController();
     abortRef.current = controller;
 
     // ComfyUI server-connected endpoint: /api/comfy/generate returns images + (optional) videoUrl
-    const promptEn = String(t).trim();
+    // 이 테스트 페이지는 선택 텍스트를 prompt로 그대로 전송하고,
+    // 한국어 번역은 서버(/api/comfy/generate)에서 처리합니다.
+    if (/^character-[a-z0-9]+$/i.test(t)) {
+      throw new Error("내부 캐릭터 ID(character-...)가 선택되어 프롬프트로 전송할 수 없습니다. 텍스트에서 '쥐/고양이' 같은 실제 단어를 선택해 주세요.");
+    }
 
     try {
       startedAtRef.current = Date.now();
@@ -336,29 +427,25 @@ export default function RunpodTestPage() {
         setElapsedMs(Date.now() - (startedAtRef.current || Date.now()));
       }, 250);
 
+      const payload = { prompt: t, count: requestedCount, width: 512, height: 512 };
+      setDebugRequest(payload);
+
       // eslint-disable-next-line no-console
       console.log("[runpod-test] send generate", {
         selected: t,
-        request: { prompt: promptEn, motion: "posing", count: requestedCount, width: 512, height: 512 }
+        request: payload
       });
       // eslint-disable-next-line no-console
       console.log("[runpod-test] interpretation", {
         note: "이 테스트 페이지는 선택 텍스트를 prompt로 그대로 전송합니다(추가 분석 없음).",
         selected: t,
-        prompt: promptEn,
-        motion: "posing"
+        prompt: t
       });
       const runRes = await fetch("/api/comfy/generate", {
         method: "POST",
         headers: { "content-type": "application/json" },
         signal: controller.signal,
-        body: JSON.stringify({
-          prompt: promptEn,
-          motion: "posing",
-          count: requestedCount,
-          width: 512,
-          height: 512
-        })
+        body: JSON.stringify(payload)
       });
       const runData = await runRes.json().catch(() => ({}));
       if (!runRes.ok) throw new Error(runData?.detail || runData?.error || "ComfyUI generate 실패");
@@ -367,6 +454,13 @@ export default function RunpodTestPage() {
         images: Array.isArray(runData?.images) ? runData.images.length : 0,
         videoUrl: String(runData?.videoUrl || ""),
         videoRef: runData?.videoRef || null
+      });
+      setDebugResponse({
+        images: Array.isArray(runData?.images) ? runData.images.length : 0,
+        videoUrl: String(runData?.videoUrl || ""),
+        videoRef: runData?.videoRef || null,
+        seed: runData?.seed,
+        meta: runData?.meta || null
       });
       const imgs = Array.isArray(runData?.images) ? runData.images.filter(Boolean) : [];
       setImages(imgs.slice(0, requestedCount));
@@ -386,6 +480,7 @@ export default function RunpodTestPage() {
       const ms = Date.now() - (startedAtRef.current || Date.now());
       setElapsedMs(ms);
       setTotalMs(ms);
+      setDebugResponse({ error: String(e?.message || e) });
     }
   }
 
@@ -474,9 +569,42 @@ export default function RunpodTestPage() {
               </div>
             </div>
 
+            <div className={styles.promptPreviewCard} aria-label="프롬프트 미리보기">
+              <div className={styles.promptPreviewTitle}>프롬프트 미리보기 (하이라이트 클릭 즉시)</div>
+              <div className={styles.promptPreviewLine}>
+                <span className={styles.promptPreviewKey}>원문</span>
+                <span className={`${styles.promptPreviewVal} ${styles.promptPreviewMono}`}>
+                  {promptPreview.requestPrompt || "-"}
+                </span>
+              </div>
+              <div className={styles.promptPreviewLine}>
+                <span className={styles.promptPreviewKey}>Comfy 전송(영어)</span>
+                <span className={`${styles.promptPreviewVal} ${styles.promptPreviewMono}`}>
+                  {promptPreviewLoading
+                    ? "서버에서 프롬프트 확정 중…"
+                    : promptPreviewError
+                      ? `(미리보기 실패) ${promptPreviewError}`
+                      : promptPreview.comfyEn
+                        ? `${promptPreview.comfyEn}${promptPreview.translated ? " (번역됨)" : ""}`
+                        : "-"}
+                </span>
+              </div>
+              {promptPreview.note ? <div className={styles.promptPreviewNote}>{promptPreview.note}</div> : null}
+            </div>
+
             <div className={styles.errorPanel}>
               <div className={styles.errorPanelTitle}>오류/상세</div>
               <div className={styles.errorPanelText}>{errorDetail}</div>
+            </div>
+
+            <div className={styles.debugPanel}>
+              <div className={styles.debugPanelTitle}>디버그 (전송/응답)</div>
+              <div className={styles.debugPanelText}>
+                <div className={styles.debugBlockTitle}>request → /api/comfy/generate</div>
+                <pre className={styles.debugPre}>{debugRequest ? JSON.stringify(debugRequest, null, 2) : "(없음)"}</pre>
+                <div className={styles.debugBlockTitle}>response ← /api/comfy/generate</div>
+                <pre className={styles.debugPre}>{debugResponse ? JSON.stringify(debugResponse, null, 2) : "(없음)"}</pre>
+              </div>
             </div>
 
             <div className={styles.actionRow}>

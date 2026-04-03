@@ -210,6 +210,8 @@ export default function TextPage() {
     draftPreviewColors,
     draftPreviewImages,
     draftPreviewVideoUrl,
+    draftPromptRequest,
+    draftPromptSent,
     draftGenerateStatus,
     draftGenerateError,
     draftPreviewIndex,
@@ -416,6 +418,21 @@ export default function TextPage() {
               {draftGenerateStatus === "error" && draftGenerateError ? (
                 <div className={styles.comfyHintError} aria-live="polite">
                   {draftGenerateError}
+                </div>
+              ) : null}
+              {draftSelectedTerm ? (
+                <div className={styles.draftPromptCard} aria-label="Comfy 프롬프트 미리보기">
+                  <div className={styles.draftPromptTitle}>Comfy 프롬프트 미리보기</div>
+                  <div className={styles.draftPromptLine}>
+                    <span className={styles.draftPromptKey}>요청</span>
+                    <span className={`${styles.draftPromptVal} ${styles.draftPromptMono}`}>{draftPromptRequest || "-"}</span>
+                  </div>
+                  <div className={styles.draftPromptLine}>
+                    <span className={styles.draftPromptKey}>Comfy 전송</span>
+                    <span className={`${styles.draftPromptVal} ${styles.draftPromptMono}`}>
+                      {draftPromptSent ? `${draftPromptSent} (번역됨)` : "(생성 후 meta.promptSent로 확정)"}
+                    </span>
+                  </div>
                 </div>
               ) : null}
               <form

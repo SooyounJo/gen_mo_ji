@@ -1,4 +1,5 @@
 import { buildWorkflowFromTemplate, loadWorkflowTemplate } from "@/lib/comfy/buildWorkflow";
+import { resolvePromptForComfy } from "@/lib/comfy/promptPipeline";
 
 function json(res, status, data) {
   res.status(status).json(data);
@@ -82,6 +83,23 @@ function guessVideoMime(filename) {
   return "video/mp4";
 }
 
+function guessImageMime(filename) {
+  const f = String(filename || "").toLowerCase();
+  if (f.endsWith(".png")) return "image/png";
+  if (f.endsWith(".jpg") || f.endsWith(".jpeg")) return "image/jpeg";
+  if (f.endsWith(".webp")) return "image/webp";
+  if (f.endsWith(".gif")) return "image/gif";
+  return "image/png";
+}
+
+function normalizeImageContentType(contentType, filename) {
+  const ct = String(contentType || "").toLowerCase().trim();
+  if (ct.startsWith("image/")) return ct;
+  // ComfyUI (or proxy) can return octet-stream for images; use filename as hint.
+  if (!ct || ct.includes("octet-stream")) return guessImageMime(filename);
+  return guessImageMime(filename);
+}
+
 function collectMediaRefsFromHistoryEntry(entry) {
   const outputs = entry?.outputs || entry?.prompt?.outputs || null;
   if (!outputs || typeof outputs !== "object") return { imageRefs: [], videoRef: null };
@@ -98,20 +116,23 @@ function collectMediaRefsFromHistoryEntry(entry) {
     imageRefs.push(ref);
   };
 
-  // Prefer images from PreviewImage (175) then decode (70)
-  for (const preferId of ["175", "70"]) {
-    const imgs = outputs?.[preferId]?.images;
-    if (Array.isArray(imgs)) {
-      for (const ref of imgs) pushUnique(ref);
+  // Collect per-node image lists first. Some nodes (e.g. PreviewImage) may emit a single tiled image
+  // when batch_size > 1. Prefer the node that returns the largest number of image refs.
+  const perNode = [];
+  for (const nodeId of Object.keys(outputs)) {
+    const imgs = outputs?.[nodeId]?.images;
+    if (Array.isArray(imgs) && imgs.length) {
+      perNode.push({ nodeId, imgs: imgs.filter((r) => isFileRef(r)) });
     }
   }
 
-  // Any other image refs
-  for (const nodeId of Object.keys(outputs)) {
-    const imgs = outputs?.[nodeId]?.images;
-    if (Array.isArray(imgs)) {
-      for (const ref of imgs) pushUnique(ref);
-    }
+  perNode.sort((a, b) => (b.imgs.length || 0) - (a.imgs.length || 0));
+  const primary = perNode[0]?.imgs || [];
+  for (const ref of primary) pushUnique(ref);
+
+  // Add any remaining refs (deduped)
+  for (const row of perNode.slice(1)) {
+    for (const ref of row.imgs) pushUnique(ref);
   }
 
   // Prefer video from SaveVideo (130)
@@ -155,7 +176,8 @@ async function fetchViewAsDataUrl(baseUrl, imageRef) {
   }
   if (!res.ok) throw new Error(`ComfyUI HTTP ${res.status}: failed to fetch /view`);
 
-  const ct = res.headers.get("content-type") || "image/png";
+  const ctRaw = res.headers.get("content-type") || "";
+  const ct = normalizeImageContentType(ctRaw, filename);
   const ab = await res.arrayBuffer();
   const b64 = Buffer.from(ab).toString("base64");
   return toDataUrl(ct, b64);
@@ -206,13 +228,22 @@ export default async function handler(req, res) {
     });
   }
 
-  const { prompt, width = 1024, height = 1024, count = 2, seed, motion, video } = req.body || {};
-  const p = String(prompt || "").trim();
-  if (!p) return json(res, 400, { error: "prompt is required" });
+  const { prompt, width = 1024, height = 1024, count = 2, seed, video } = req.body || {};
+  let resolved;
+  try {
+    resolved = await resolvePromptForComfy(prompt);
+  } catch (e) {
+    return json(res, 502, { error: "Prompt processing failed", detail: String(e?.message || e) });
+  }
+  if (!resolved.ok) {
+    return json(res, 400, { error: resolved.error, detail: resolved.detail || "" });
+  }
+  const { promptOriginal: p0, promptSent: p, translated } = resolved;
 
   const n = Math.max(1, Math.min(4, Number(count) || 2));
   const baseSeed = Number.isFinite(seed) ? Number(seed) : stableSeedFromString(p);
   const wantVideo = video !== false && video !== 0 && video !== "0";
+  const effectiveBatch = wantVideo ? 1 : n;
 
   let template;
   try {
@@ -227,8 +258,7 @@ export default async function handler(req, res) {
       seed: baseSeed,
       width: Number(width),
       height: Number(height),
-      batchSize: n,
-      motion
+      batchSize: effectiveBatch
     });
 
     const queued = await comfyFetch(baseUrl, "/prompt", {
@@ -255,6 +285,7 @@ export default async function handler(req, res) {
     return json(res, 200, {
       images,
       seed: baseSeed,
+      meta: { requestedCount: n, effectiveBatch, promptOriginal: p0, promptSent: p, translated },
       ...(videoRef ? { videoUrl, videoRef: { ...videoRef, mime: videoMime } } : { videoUrl: "", videoRef: null })
     });
   } catch (e) {
