@@ -543,6 +543,7 @@ export function useTextLogic() {
   const [draftSelectedTerm, setDraftSelectedTerm] = useState(null);
   const [draftPreviewIndex, setDraftPreviewIndex] = useState(0);
   const [draftPreviewImages, setDraftPreviewImages] = useState([]);
+  const [draftPreviewVideoUrl, setDraftPreviewVideoUrl] = useState("");
   const [draftGenerateStatus, setDraftGenerateStatus] = useState("idle"); // idle | loading | done | error
   const [draftGenerateError, setDraftGenerateError] = useState("");
   const [timeline, setTimeline] = useState(() => []);
@@ -592,6 +593,7 @@ export function useTextLogic() {
       if (genAbortRef.current) genAbortRef.current.abort();
       if (genTimerRef.current) window.clearTimeout(genTimerRef.current);
       setDraftPreviewImages([]);
+      setDraftPreviewVideoUrl("");
       setDraftGenerateStatus("idle");
       setDraftGenerateError("");
       return;
@@ -609,12 +611,25 @@ export function useTextLogic() {
     genTimerRef.current = window.setTimeout(async () => {
       try {
         const analysis = analyzeSelection(term, text, nickname);
+        const motion =
+          analysis.action === "산책하기"
+            ? "walking"
+            : analysis.action === "주기"
+              ? "giving"
+              : analysis.action === "먹기"
+                ? "eating"
+                : analysis.action === "떨어뜨리기"
+                  ? "dropping"
+                  : analysis.action === "변신하기"
+                    ? "transforming"
+                    : "posing";
         const res = await fetch("/api/comfy/generate", {
           method: "POST",
           headers: { "content-type": "application/json" },
           signal: controller.signal,
           body: JSON.stringify({
             prompt: analysis.imagePrompt,
+            motion,
             width: 1024,
             height: 1024,
             count: 2
@@ -625,11 +640,13 @@ export function useTextLogic() {
         if (seq !== genSeqRef.current) return;
         const imgs = Array.isArray(data?.images) ? data.images.filter(Boolean) : [];
         setDraftPreviewImages(imgs.slice(0, 2));
+        setDraftPreviewVideoUrl(String(data?.videoUrl || ""));
         setDraftGenerateStatus("done");
       } catch (e) {
         if (controller.signal.aborted) return;
         if (seq !== genSeqRef.current) return;
         setDraftPreviewImages([]);
+        setDraftPreviewVideoUrl("");
         setDraftGenerateStatus("error");
         setDraftGenerateError(String(e?.message || e));
       }
@@ -713,10 +730,12 @@ export function useTextLogic() {
     const selected = draftSelectedTerm;
     const previewIndex = Number.isFinite(opts.previewIndex) ? opts.previewIndex : draftPreviewIndex;
     const imagesSnapshot = Array.isArray(draftPreviewImages) ? draftPreviewImages.slice(0, 2) : [];
+    const videoSnapshot = String(draftPreviewVideoUrl || "");
     setMessageInput("");
     setDraftSelectedTerm(null);
     setDraftPreviewIndex(0);
     setDraftPreviewImages([]);
+    setDraftPreviewVideoUrl("");
     setDraftGenerateStatus("idle");
     setDraftGenerateError("");
     const candidates = extractCandidates(text);
@@ -748,6 +767,14 @@ export function useTextLogic() {
             selectedIndex: previewIndex
           }
         );
+        if (videoSnapshot) {
+          next.push({
+            id: id(),
+            role: "bot",
+            type: "generatedVideo",
+            src: videoSnapshot
+          });
+        }
       }
       return next;
     });
@@ -832,6 +859,7 @@ export function useTextLogic() {
     liveCandidates,
     draftPreviewColors,
     draftPreviewImages,
+    draftPreviewVideoUrl,
     draftGenerateStatus,
     draftGenerateError,
     draftPreviewIndex,

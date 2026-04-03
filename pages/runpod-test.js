@@ -76,6 +76,14 @@ function toKoreanRunpodMessage(raw, hint) {
 
   if (!s && !h) return "알 수 없는 오류가 발생했습니다.";
 
+  if (/ComfyUI HTTP 404/i.test(combined) || /404 Not Found/i.test(combined)) {
+    return [
+      "ComfyUI 서버에서 404(Not Found)가 발생했습니다.",
+      "대부분 `COMFYUI_BASE_URL`이 ComfyUI 루트가 아니거나(포트/경로 오류), 해당 주소에서 ComfyUI가 실행 중이 아닌 경우입니다.",
+      "확인: 브라우저에서 `COMFYUI_BASE_URL`을 열었을 때 ComfyUI 화면이 떠야 하고, 보통 API는 `/prompt`가 존재합니다."
+    ].join(" ");
+  }
+
   if (/Failed to fetch|NetworkError|Load failed|네트워크.*실패/i.test(combined)) {
     return "네트워크 오류로 서버에 연결할 수 없습니다. 인터넷 연결과 API 주소를 확인하세요.";
   }
@@ -207,33 +215,53 @@ export default function RunpodTestPage() {
   const [status, setStatus] = useState("idle"); // idle | loading | done | error
   const [error, setError] = useState("");
   const [hint, setHint] = useState("");
-  const [runpodStatus, setRunpodStatus] = useState("");
-  const [elapsedMs, setElapsedMs] = useState(0);
   const [images, setImages] = useState([]);
-  const [jobId, setJobId] = useState("");
+  const [videoUrl, setVideoUrl] = useState("");
+  const [count, setCount] = useState(2);
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const [totalMs, setTotalMs] = useState(0);
   const abortRef = useRef(null);
-  const pollTimerRef = useRef(null);
-  const tickTimerRef = useRef(null);
   const lastTermRef = useRef("");
-  const queueWarnedRef = useRef(false);
+  const startedAtRef = useRef(0);
+  const tickTimerRef = useRef(null);
 
   const candidates = useMemo(() => extractCandidates(text), [text]);
-  const mainImage = images?.[0] || "";
   const processLine = useMemo(() => {
     if (status === "loading") {
-      const sec = elapsedMs ? `${Math.floor(elapsedMs / 1000)}초` : "0초";
-      const rp = runpodStatus ? ` / ${runpodStatus}` : "";
-      return `생성 중 ${sec}${rp}`;
+      return "생성 중…";
     }
     if (status === "done") return "생성 완료";
     if (status === "error") return "생성 실패";
     return "대기 중";
-  }, [status, elapsedMs, runpodStatus]);
+  }, [status]);
+
+  const requestedCount = useMemo(() => {
+    const n = Math.max(1, Math.min(4, Number(count) || 2));
+    return n;
+  }, [count]);
+
+  const imageSlots = useMemo(() => {
+    const arr = Array.isArray(images) ? images : [];
+    return Array.from({ length: requestedCount }, (_, i) => String(arr?.[i] || ""));
+  }, [images, requestedCount]);
 
   const errorDetail = useMemo(() => {
-    if (status !== "error") return "오류가 발생하면 이 영역에 상세 사유가 표시됩니다.";
-    return toKoreanRunpodMessage(error, hint);
-  }, [status, error, hint]);
+    const seconds = Math.max(0, Math.floor((elapsedMs || 0) / 1000));
+    const totalSeconds = Math.max(0, Math.floor((totalMs || 0) / 1000));
+
+    if (status === "loading") {
+      return `생성 중...\n경과: ${seconds}초`;
+    }
+    if (status === "done") {
+      return `생성 완료\n총 소요: ${totalSeconds || seconds}초`;
+    }
+    if (status === "error") {
+      const base = toKoreanRunpodMessage(error, hint);
+      const t = totalSeconds || seconds;
+      return t ? `${base}\n\n총 소요: ${t}초` : base;
+    }
+    return "오류가 발생하면 이 영역에 상세 사유가 표시됩니다.";
+  }, [status, error, hint, elapsedMs, totalMs]);
 
   useEffect(() => {
     if (!selected) return;
@@ -258,22 +286,20 @@ export default function RunpodTestPage() {
   useEffect(() => {
     return () => {
       if (abortRef.current) abortRef.current.abort();
-      if (pollTimerRef.current) window.clearTimeout(pollTimerRef.current);
       if (tickTimerRef.current) window.clearInterval(tickTimerRef.current);
     };
   }, []);
 
   function cancel() {
     if (abortRef.current) abortRef.current.abort();
-    if (pollTimerRef.current) window.clearTimeout(pollTimerRef.current);
     if (tickTimerRef.current) window.clearInterval(tickTimerRef.current);
     setStatus("idle");
-    setRunpodStatus("");
-    setElapsedMs(0);
     setError("");
     setHint("");
     setImages([]);
-    setJobId("");
+    setVideoUrl("");
+    setElapsedMs(0);
+    setTotalMs(0);
   }
 
   function retry() {
@@ -287,135 +313,56 @@ export default function RunpodTestPage() {
     if (!t) return;
 
     lastTermRef.current = t;
-    queueWarnedRef.current = false;
     setSelected(t);
     setStatus("loading");
     setError("");
     setHint("");
-    setRunpodStatus("");
-    setElapsedMs(0);
     setImages([]);
-    setJobId("");
+    setVideoUrl("");
+    setElapsedMs(0);
+    setTotalMs(0);
 
     if (abortRef.current) abortRef.current.abort();
     const controller = new AbortController();
     abortRef.current = controller;
 
-    if (pollTimerRef.current) window.clearTimeout(pollTimerRef.current);
-    if (tickTimerRef.current) window.clearInterval(tickTimerRef.current);
-
-    // Serverless endpoint: /run returns id, then we poll /status/{id}
-    // 긴 영문 템플릿 대신 하이라이트 단어만 전달 (디버깅·에러 원인 분리용)
+    // ComfyUI server-connected endpoint: /api/comfy/generate returns images + (optional) videoUrl
     const promptEn = String(t).trim();
 
     try {
+      startedAtRef.current = Date.now();
+      if (tickTimerRef.current) window.clearInterval(tickTimerRef.current);
+      tickTimerRef.current = window.setInterval(() => {
+        setElapsedMs(Date.now() - (startedAtRef.current || Date.now()));
+      }, 250);
+
       // eslint-disable-next-line no-console
       console.log("[runpod-test] send generate", {
         selected: t,
-        request: { prompt: promptEn, count: 2, width: 512, height: 512 }
+        request: { prompt: promptEn, motion: "posing", count: requestedCount, width: 512, height: 512 }
       });
-      const runRes = await fetch("/api/runpod/run", {
+      const runRes = await fetch("/api/comfy/generate", {
         method: "POST",
         headers: { "content-type": "application/json" },
         signal: controller.signal,
         body: JSON.stringify({
           prompt: promptEn,
-          count: 2,
+          motion: "posing",
+          count: requestedCount,
           width: 512,
-          height: 512,
-          includeResolvedPrompt: true
+          height: 512
         })
       });
       const runData = await runRes.json().catch(() => ({}));
-      if (runData?.resolvedPrompt) {
-        // eslint-disable-next-line no-console
-        console.log("[runpod-test] resolved prompt (server)", runData.resolvedPrompt);
-      }
-      if (!runRes.ok) throw new Error(runData?.detail || runData?.error || "RunPod run 실패");
-      const id = String(runData?.id || "");
-      if (!id) throw new Error("RunPod job id가 없습니다");
-      setJobId(id);
-      // eslint-disable-next-line no-console
-      console.log("[runpod-test] run submitted", { id });
-
-      const startedAt = Date.now();
-      tickTimerRef.current = window.setInterval(() => {
-        setElapsedMs(Date.now() - startedAt);
-      }, 250);
-
-      const pollOnce = async () => {
-        if (controller.signal.aborted) return;
-        let stRes = null;
-        try {
-          stRes = await fetch(`/api/runpod/status/${encodeURIComponent(id)}?t=${Date.now()}`, {
-            method: "GET",
-            signal: controller.signal,
-            cache: "no-store"
-          });
-          const stData = await stRes.json().catch(() => ({}));
-          if (!stRes.ok) throw new Error(stData?.detail || stData?.error || "RunPod status 실패");
-
-          const st = String(stData?.status || "").toUpperCase();
-          setRunpodStatus(st);
-          // eslint-disable-next-line no-console
-          console.log("[runpod-test] status poll", {
-            id,
-            status: st,
-            images: Array.isArray(stData?.images) ? stData.images.length : 0
-          });
-          if (st === "COMPLETED") {
-            const imgs = Array.isArray(stData?.images) ? stData.images.filter(Boolean) : [];
-            if (imgs.length === 0) {
-              setStatus("error");
-              setError(
-                "RunPod status COMPLETED but no image in response. Check worker output shape and /api/runpod/status parsing."
-              );
-              setHint("");
-              if (tickTimerRef.current) window.clearInterval(tickTimerRef.current);
-              return;
-            }
-            setImages(imgs.slice(0, 2));
-            setStatus("done");
-            if (tickTimerRef.current) window.clearInterval(tickTimerRef.current);
-            return;
-          }
-          if (st === "FAILED" || st === "CANCELLED" || st === "TIMED_OUT") {
-            setStatus("error");
-            setError(pickRunpodFailureText(stData));
-            setHint(String(stData?.hint || ""));
-            if (tickTimerRef.current) window.clearInterval(tickTimerRef.current);
-            return;
-          }
-
-          // If it sits in queue too long, keep waiting but show a strong hint once.
-          if (st === "IN_QUEUE" && Date.now() - startedAt > 2 * 60 * 1000 && !queueWarnedRef.current) {
-            queueWarnedRef.current = true;
-            setHint(
-              "RunPod 대기열(IN_QUEUE)에서 오래 대기 중입니다. 콘솔에서 max workers·할당량·리전 GPU·워커 크래시 로그를 확인하세요."
-            );
-          }
-
-          if (Date.now() - startedAt > 10 * 60 * 1000) {
-            setStatus("error");
-            setError(`RunPod timeout waiting for job_id=${id}`);
-            if (tickTimerRef.current) window.clearInterval(tickTimerRef.current);
-            return;
-          }
-
-          pollTimerRef.current = window.setTimeout(pollOnce, 1500);
-        } catch (e) {
-          if (controller.signal.aborted) return;
-          setStatus("error");
-          const msg = String(e?.message || e);
-          setError(msg);
-          setHint(stRes != null && !stRes.ok ? "상태 조회 HTTP 오류 — 엔드포인트·작업 ID·네트워크를 확인하세요." : "");
-          // eslint-disable-next-line no-console
-          console.error("[runpod-test] status poll error", e);
-          if (tickTimerRef.current) window.clearInterval(tickTimerRef.current);
-        }
-      };
-
-      pollTimerRef.current = window.setTimeout(pollOnce, 600);
+      if (!runRes.ok) throw new Error(runData?.detail || runData?.error || "ComfyUI generate 실패");
+      const imgs = Array.isArray(runData?.images) ? runData.images.filter(Boolean) : [];
+      setImages(imgs.slice(0, requestedCount));
+      setVideoUrl(String(runData?.videoUrl || ""));
+      setStatus("done");
+      const ms = Date.now() - (startedAtRef.current || Date.now());
+      setElapsedMs(ms);
+      setTotalMs(ms);
+      if (tickTimerRef.current) window.clearInterval(tickTimerRef.current);
     } catch (e) {
       if (controller.signal.aborted) return;
       setStatus("error");
@@ -423,6 +370,9 @@ export default function RunpodTestPage() {
       // eslint-disable-next-line no-console
       console.error("[runpod-test] generate error", e);
       if (tickTimerRef.current) window.clearInterval(tickTimerRef.current);
+      const ms = Date.now() - (startedAtRef.current || Date.now());
+      setElapsedMs(ms);
+      setTotalMs(ms);
     }
   }
 
@@ -457,7 +407,7 @@ export default function RunpodTestPage() {
       <div className={styles.appShell}>
         <header className={styles.header}>
           <div>
-            <div className={styles.title}>RunPod 고정 URL 테스트</div>
+            <div className={styles.title}>ComfyUI 서버 연결 테스트</div>
           </div>
         </header>
 
@@ -473,6 +423,17 @@ export default function RunpodTestPage() {
               rows={4}
               placeholder="예: 춤추는 개구리"
               spellCheck={false}
+            />
+
+            <label className={styles.label}>이미지 수 (count)</label>
+            <input
+              className={styles.countInput}
+              type="number"
+              min={1}
+              max={4}
+              step={1}
+              value={count}
+              onChange={(e) => setCount(e.target.value)}
             />
 
             <div className={styles.previewLabel}>하이라이트 (클릭)</div>
@@ -498,16 +459,6 @@ export default function RunpodTestPage() {
                 <span className={styles.metaKey}>상태</span>
                 <span className={styles.metaVal}>{status === "loading" ? "생성 중" : status === "error" ? "에러" : status === "done" ? "완료" : "대기"}</span>
               </div>
-              <div className={styles.metaLine}>
-                <span className={styles.metaKey}>job_id</span>
-                <span className={styles.metaVal}>{jobId || "-"}</span>
-              </div>
-              {!!elapsedMs && status === "loading" ? (
-                <div className={styles.metaLine}>
-                  <span className={styles.metaKey}>경과</span>
-                  <span className={styles.metaVal}>{Math.floor(elapsedMs / 1000)}초</span>
-                </div>
-              ) : null}
             </div>
 
             <div className={styles.errorPanel}>
@@ -532,13 +483,24 @@ export default function RunpodTestPage() {
           <section className={styles.rightPanel}>
             <div className={styles.panelTitle}>Result</div>
             <div className={styles.processLine}>{processLine}</div>
-            <div className={styles.canvas} aria-label="생성 이미지">
-              {mainImage ? (
-                <div className={styles.alphaImgWrap}>
-                  <img className={styles.mainImg} src={mainImage} alt="generated" />
+            <div className={styles.imageGrid} aria-label="생성 이미지들">
+              {imageSlots.map((src, i) => (
+                <div key={i} className={styles.imageTile} aria-label={`생성 이미지 ${i + 1}`}>
+                  {src ? (
+                    <div className={styles.alphaImgWrap}>
+                      <img className={styles.mainImg} src={src} alt={`generated ${i + 1}`} />
+                    </div>
+                  ) : (
+                    <div className={styles.emptyImageState}>{status === "loading" ? `이미지 ${i + 1} 생성 중…` : `이미지 ${i + 1} 대기`}</div>
+                  )}
                 </div>
+              ))}
+            </div>
+            <div className={styles.videoTile} aria-label="생성 비디오" style={{ marginTop: 12 }}>
+              {videoUrl ? (
+                <video className={styles.video} src={videoUrl} controls loop muted playsInline />
               ) : (
-                <div className={styles.emptyImageState}>이미지 대기 중</div>
+                <div className={styles.emptyImageState}>비디오 대기 중</div>
               )}
             </div>
           </section>

@@ -209,6 +209,7 @@ export default function TextPage() {
     liveCandidates,
     draftPreviewColors,
     draftPreviewImages,
+    draftPreviewVideoUrl,
     draftGenerateStatus,
     draftGenerateError,
     draftPreviewIndex,
@@ -354,6 +355,24 @@ export default function TextPage() {
                 );
               }
 
+              if (m.type === "generatedVideo") {
+                return (
+                  <div key={m.id} className={styles.introRow}>
+                    <div className={styles.introAvatar}>
+                      <img className={styles.introAvatarImg} src={AVATAR_2} alt="" />
+                    </div>
+                    <div className={styles.figImageCard}>
+                      <div className={styles.figImageLabel}>생성 비디오</div>
+                      {m.src ? (
+                        <video className={styles.figImage} src={m.src} controls loop muted playsInline />
+                      ) : (
+                        <div className={styles.figColorPreview} aria-label="생성 비디오" />
+                      )}
+                    </div>
+                  </div>
+                );
+              }
+
               const bubbleClass =
                 m.variant === "userWhite"
                   ? styles.userBubble
@@ -461,6 +480,11 @@ export default function TextPage() {
                       {draftGenerateStatus === "loading" ? <span className={styles.draftPreviewLoading} aria-hidden="true" /> : null}
                     </button>
                   </div>
+                  {draftPreviewVideoUrl && draftGenerateStatus !== "loading" ? (
+                    <div className={styles.draftVideoRow} aria-label="비디오 생성 프리뷰">
+                      <video className={styles.draftVideo} src={draftPreviewVideoUrl} controls loop muted playsInline />
+                    </div>
+                  ) : null}
                   <div
                     className={styles.inputMirror}
                     onMouseDown={(e) => {

@@ -4,13 +4,6 @@ function json(res, status, data) {
   res.status(status).json(data);
 }
 
-function toDataUrlWebp(base64) {
-  const b64 = String(base64 || "").trim();
-  if (!b64) return "";
-  if (b64.startsWith("data:")) return b64;
-  return `data:image/webp;base64,${b64}`;
-}
-
 function toDataUrl(contentType, base64) {
   const b64 = String(base64 || "").trim();
   if (!b64) return "";
@@ -41,69 +34,102 @@ async function comfyFetch(baseUrl, pathname, opts) {
   }
   if (!res.ok) {
     const msg = data?.error || data?.message || text || `${res.status} ${res.statusText}`;
-    throw new Error(`ComfyUI HTTP ${res.status}: ${msg}`);
+    const short = String(msg || "").replace(/\s+/g, " ").trim().slice(0, 500);
+    throw new Error(`ComfyUI HTTP ${res.status} at ${url}: ${short || res.statusText || "HTTP error"}`);
   }
   return data;
 }
 
-function extractBase64FromHistoryEntry(entry) {
-  const outputs = entry?.outputs || entry?.prompt?.outputs || null;
-  if (!outputs || typeof outputs !== "object") return "";
-
-  const node127 = outputs["127"];
-  if (node127 && typeof node127 === "object") {
-    // ShowText|pysssss output is usually a list of strings (STRING)
-    for (const k of Object.keys(node127)) {
-      const v = node127[k];
-      if (Array.isArray(v) && typeof v[0] === "string") return v[0];
-      if (typeof v === "string") return v;
-    }
-  }
-
-  const node126 = outputs["126"];
-  if (node126) {
-    const t = node126.text ?? node126.string ?? node126.base64 ?? node126.output ?? null;
-    if (Array.isArray(t) && typeof t[0] === "string") return t[0];
-    if (typeof t === "string") return t;
-    if (Array.isArray(node126?.texts) && typeof node126.texts[0] === "string") return node126.texts[0];
-  }
-
-  // fallback: scan any output that looks like base64 webp
-  for (const k of Object.keys(outputs)) {
-    const out = outputs[k];
-    if (!out || typeof out !== "object") continue;
-    const candidates = [];
-    if (typeof out.text === "string") candidates.push(out.text);
-    if (Array.isArray(out.text) && typeof out.text[0] === "string") candidates.push(out.text[0]);
-    if (typeof out.base64 === "string") candidates.push(out.base64);
-    if (Array.isArray(out.base64) && typeof out.base64[0] === "string") candidates.push(out.base64[0]);
-    for (const c of candidates) {
-      const s = String(c || "").trim();
-      if (s.length > 100 && /^[A-Za-z0-9+/=]+$/.test(s)) return s;
-    }
-  }
-
-  return "";
+function isFileRef(v) {
+  return v && typeof v === "object" && typeof v.filename === "string" && v.filename.trim();
 }
 
-function extractFirstImageRefFromHistoryEntry(entry) {
+function fileRefKey(ref) {
+  return `${ref?.type || ""}::${ref?.subfolder || ""}::${ref?.filename || ""}`;
+}
+
+function collectFileRefsFromValue(value) {
+  const out = [];
+  const walk = (v) => {
+    if (!v) return;
+    if (isFileRef(v)) {
+      out.push(v);
+      return;
+    }
+    if (Array.isArray(v)) {
+      for (const it of v) walk(it);
+      return;
+    }
+    if (typeof v === "object") {
+      for (const k of Object.keys(v)) walk(v[k]);
+    }
+  };
+  walk(value);
+  return out;
+}
+
+function hasVideoExtension(filename) {
+  const f = String(filename || "").toLowerCase();
+  return f.endsWith(".mp4") || f.endsWith(".webm") || f.endsWith(".gif") || f.endsWith(".mov") || f.endsWith(".mkv");
+}
+
+function guessVideoMime(filename) {
+  const f = String(filename || "").toLowerCase();
+  if (f.endsWith(".webm")) return "video/webm";
+  if (f.endsWith(".gif")) return "image/gif";
+  if (f.endsWith(".mov")) return "video/quicktime";
+  if (f.endsWith(".mkv")) return "video/x-matroska";
+  return "video/mp4";
+}
+
+function collectMediaRefsFromHistoryEntry(entry) {
   const outputs = entry?.outputs || entry?.prompt?.outputs || null;
-  if (!outputs || typeof outputs !== "object") return null;
+  if (!outputs || typeof outputs !== "object") return { imageRefs: [], videoRef: null };
 
-  const prefer = ["113", "70", "63"];
-  for (const nodeId of prefer) {
-    const out = outputs[nodeId];
-    const imgs = out?.images;
-    if (Array.isArray(imgs) && imgs.length && imgs[0]?.filename) return imgs[0];
+  const seen = new Set();
+  const imageRefs = [];
+  let videoRef = null;
+
+  const pushUnique = (ref) => {
+    if (!isFileRef(ref)) return;
+    const key = fileRefKey(ref);
+    if (seen.has(key)) return;
+    seen.add(key);
+    imageRefs.push(ref);
+  };
+
+  // Prefer images from PreviewImage (175) then decode (70)
+  for (const preferId of ["175", "70"]) {
+    const imgs = outputs?.[preferId]?.images;
+    if (Array.isArray(imgs)) {
+      for (const ref of imgs) pushUnique(ref);
+    }
   }
 
-  for (const k of Object.keys(outputs)) {
-    const out = outputs[k];
-    const imgs = out?.images;
-    if (Array.isArray(imgs) && imgs.length && imgs[0]?.filename) return imgs[0];
+  // Any other image refs
+  for (const nodeId of Object.keys(outputs)) {
+    const imgs = outputs?.[nodeId]?.images;
+    if (Array.isArray(imgs)) {
+      for (const ref of imgs) pushUnique(ref);
+    }
   }
 
-  return null;
+  // Prefer video from SaveVideo (130)
+  const videoCandidates = [];
+  const preferred = outputs?.["130"];
+  if (preferred) videoCandidates.push(...collectFileRefsFromValue(preferred));
+  for (const nodeId of Object.keys(outputs)) {
+    videoCandidates.push(...collectFileRefsFromValue(outputs[nodeId]));
+  }
+
+  for (const ref of videoCandidates) {
+    if (!isFileRef(ref)) continue;
+    if (!hasVideoExtension(ref.filename)) continue;
+    videoRef = ref;
+    break;
+  }
+
+  return { imageRefs, videoRef };
 }
 
 async function fetchViewAsDataUrl(baseUrl, imageRef) {
@@ -135,21 +161,28 @@ async function fetchViewAsDataUrl(baseUrl, imageRef) {
   return toDataUrl(ct, b64);
 }
 
-async function waitForResult(baseUrl, promptId, { timeoutMs = 240000, pollMs = 800 } = {}) {
+function buildLocalAssetUrl({ filename, subfolder, type }) {
+  const qs = new URLSearchParams({
+    filename: String(filename || ""),
+    subfolder: String(subfolder || ""),
+    type: String(type || "output")
+  });
+  return `/api/comfy/asset?${qs.toString()}`;
+}
+
+async function waitForMedia(baseUrl, promptId, { timeoutMs = 480000, pollMs = 900, wantVideo = true } = {}) {
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
     const history = await comfyFetch(baseUrl, `/history/${encodeURIComponent(promptId)}`, { method: "GET" });
     const entry = history?.[promptId] || null;
-
-    const b64 = extractBase64FromHistoryEntry(entry);
-    if (b64) return { kind: "base64", base64: b64 };
-
-    const imgRef = extractFirstImageRefFromHistoryEntry(entry);
-    if (imgRef) return { kind: "imageRef", imageRef: imgRef };
+    const media = collectMediaRefsFromHistoryEntry(entry);
+    const hasImages = Array.isArray(media.imageRefs) && media.imageRefs.length > 0;
+    const hasVideo = !!media.videoRef;
+    if (hasImages && (!wantVideo || hasVideo)) return media;
 
     await sleep(pollMs);
   }
-  throw new Error(`ComfyUI timeout waiting for prompt_id=${promptId}`);
+  throw new Error(`ComfyUI timeout waiting for media prompt_id=${promptId}`);
 }
 
 function stableSeedFromString(s) {
@@ -173,12 +206,13 @@ export default async function handler(req, res) {
     });
   }
 
-  const { prompt, width = 1024, height = 1024, count = 2, seed } = req.body || {};
+  const { prompt, width = 1024, height = 1024, count = 2, seed, motion, video } = req.body || {};
   const p = String(prompt || "").trim();
   if (!p) return json(res, 400, { error: "prompt is required" });
 
   const n = Math.max(1, Math.min(4, Number(count) || 2));
   const baseSeed = Number.isFinite(seed) ? Number(seed) : stableSeedFromString(p);
+  const wantVideo = video !== false && video !== 0 && video !== "0";
 
   let template;
   try {
@@ -188,35 +222,41 @@ export default async function handler(req, res) {
   }
 
   try {
-    const results = [];
-    for (let i = 0; i < n; i += 1) {
-      const wf = buildWorkflowFromTemplate(template, {
-        prompt: p,
-        seed: baseSeed + i,
-        width: Number(width),
-        height: Number(height)
-      });
+    const wf = buildWorkflowFromTemplate(template, {
+      prompt: p,
+      seed: baseSeed,
+      width: Number(width),
+      height: Number(height),
+      batchSize: n,
+      motion
+    });
 
-      const queued = await comfyFetch(baseUrl, "/prompt", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ prompt: wf })
-      });
+    const queued = await comfyFetch(baseUrl, "/prompt", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ prompt: wf })
+    });
 
-      const promptId = queued?.prompt_id;
-      if (!promptId) throw new Error("ComfyUI did not return prompt_id");
+    const promptId = queued?.prompt_id;
+    if (!promptId) throw new Error("ComfyUI did not return prompt_id");
 
-      const result = await waitForResult(baseUrl, promptId);
-      if (result.kind === "base64") {
-        results.push(toDataUrlWebp(result.base64));
-      } else if (result.kind === "imageRef") {
-        results.push(await fetchViewAsDataUrl(baseUrl, result.imageRef));
-      } else {
-        throw new Error("Unknown ComfyUI result kind");
-      }
+    const media = await waitForMedia(baseUrl, promptId, { wantVideo });
+
+    const imageRefs = Array.isArray(media.imageRefs) ? media.imageRefs.slice(0, n) : [];
+    const images = [];
+    for (const ref of imageRefs) {
+      images.push(await fetchViewAsDataUrl(baseUrl, ref));
     }
 
-    return json(res, 200, { images: results, seed: baseSeed });
+    const videoRef = media.videoRef || null;
+    const videoUrl = videoRef ? buildLocalAssetUrl(videoRef) : "";
+    const videoMime = videoRef ? guessVideoMime(videoRef.filename) : "";
+
+    return json(res, 200, {
+      images,
+      seed: baseSeed,
+      ...(videoRef ? { videoUrl, videoRef: { ...videoRef, mime: videoMime } } : { videoUrl: "", videoRef: null })
+    });
   } catch (e) {
     return json(res, 502, { error: "ComfyUI generation failed", detail: String(e?.message || e) });
   }
