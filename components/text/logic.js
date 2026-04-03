@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import { buildImagePrompt, toEnglishNoun } from "@/lib/prompts/imagePrompt";
+import { isSingleSentenceSpan, splitIntoSentences } from "@/lib/extractHighlightCandidates";
 
 function id() {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -46,6 +47,7 @@ function extractCandidates(text) {
   // "구/절" 후보(수식/원인/결과가 있는 표현)
   const clauseCandidates = [];
   const normalized = s.replace(/\s+/g, " ").trim();
+  const sentenceBlocks = splitIntoSentences(normalized).filter((x) => x.length >= 2);
   const clauses = normalized.split(/[.!?]/).map((x) => x.trim()).filter(Boolean);
   for (const c of clauses) {
     const hasCausal = /(해서|하여|되서|돼서|되어|돼|때문에|덕분에|떨어뜨|붙여|섞어|넣어|만들어|변해|변신)/.test(c);
@@ -125,15 +127,18 @@ function extractCandidates(text) {
       : bestTokens;
 
   // 내부 캐릭터 ID가 포함된 스팬도 제거 (예: "character-rcr001 ...")
-  const merged = uniq([...phrases, ...became, ...tokens]).filter((x) => !/character-[a-z0-9]+/i.test(String(x || "")));
-  if (merged.length) return merged.slice(0, 8);
+  const merged = uniq([...sentenceBlocks, ...phrases, ...became, ...tokens]).filter(
+    (x) => !/character-[a-z0-9]+/i.test(String(x || ""))
+  );
+  const scoped = merged.filter((x) => isSingleSentenceSpan(x));
+  if (scoped.length) return scoped.slice(0, 8);
 
   return uniq(
     scored
       .sort((a, b) => b.score - a.score)
       .slice(0, 6)
       .map((x) => x.w)
-  );
+  ).filter((x) => isSingleSentenceSpan(x));
 }
 
 function inferEmotion(term) {

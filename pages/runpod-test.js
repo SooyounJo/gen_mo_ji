@@ -2,78 +2,17 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import styles from "@/styles/RunpodTest.module.css";
 import GradientText from "@/components/ui/GradientText";
 import Grainient from "@/components/ui/Grainient";
+import {
+  extractHighlightCandidates,
+  splitTextForHighlight
+} from "@/lib/extractHighlightCandidates";
+
 function looksKorean(s) {
   return /[가-힣]/.test(String(s || ""));
 }
 
-function escapeRegExp(str) {
-  return String(str || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function uniq(arr) {
-  return Array.from(new Set(arr));
-}
-
-function extractCandidates(text) {
-  const s = String(text || "").trim();
-  if (!s) return [];
-
-  const normalized = s.replace(/\s+/g, " ").trim();
-  const stop = new Set([
-    "그리고",
-    "그런데",
-    "하지만",
-    "그래서",
-    "저는",
-    "나는",
-    "너는",
-    "우리는",
-    "오늘",
-    "진짜",
-    "너무",
-    "완전",
-    "그냥"
-  ]);
-
-  // 1) 구/문장 스팬 우선 추출 (명사+동사/행동 사건)
-  const phrasePatterns = [
-    /[A-Za-z0-9가-힣]+(?:\s+[A-Za-z0-9가-힣]+){0,4}\s+(?:춤추는|먹는|마시는|주는|줬어|줬다|산책하는|달리는|뛰는|웃는|우는|변신하는|떨어뜨리는|보고있는)/g,
-    /[A-Za-z0-9가-힣]+(?:\s+[A-Za-z0-9가-힣]+){0,4}\s+(?:했어|했다|하고있어|하는중|됨|됐다|돼서|되어서)/g,
-    /[A-Za-z0-9가-힣]+(?:랑|과)\s+[A-Za-z0-9가-힣]+(?:\s+[A-Za-z0-9가-힣]+){0,3}/g
-  ];
-  const phraseCandidates = [];
-  for (const re of phrasePatterns) {
-    const hits = normalized.match(re) || [];
-    for (const h of hits) {
-      const t = String(h || "").trim();
-      if (t.length >= 4 && t.length <= 42) phraseCandidates.push(t);
-    }
-  }
-
-  // 2) fallback: 짧은 스팬(2~4단어 n-gram)
-  const words = normalized
-    .split(" ")
-    .map((w) => String(w || "").trim())
-    .filter((w) => w && !stop.has(w))
-    // 내부 캐릭터 ID(예: character-rcr001)는 후보에서 제거
-    .filter((w) => !/^character-[a-z0-9]+$/i.test(w));
-  const shortSpans = [];
-  for (let n = 2; n <= 4; n += 1) {
-    for (let i = 0; i + n <= words.length; i += 1) {
-      const span = words.slice(i, i + n).join(" ").trim();
-      if (span.length >= 4 && span.length <= 24) shortSpans.push(span);
-    }
-  }
-
-  // 3) 단일 단어는 최소화해서 보조로만
-  const single = (normalized.match(/[A-Za-z0-9가-힣]{2,}/g) || [])
-    .filter((w) => !stop.has(w))
-    .filter((w) => !/^character-[a-z0-9]+$/i.test(w))
-    .slice(0, 2);
-
-  return uniq([...phraseCandidates, ...shortSpans, ...single])
-    .filter((x) => !/character-[a-z0-9]+/i.test(String(x || "")))
-    .slice(0, 12);
+function normalizeSpace(str) {
+  return String(str || "").replace(/\s+/g, " ").trim();
 }
 
 /** RunPod/ComfyUI 오류 문자열을 웹에 표시할 한국어로 정리 */
@@ -180,26 +119,24 @@ function HighlightText({ text, candidates, selectedTerm, onPick }) {
   const list = (candidates || []).filter(Boolean);
   if (!value || list.length === 0) return value;
 
-  const pattern = list
-    .slice()
-    .sort((a, b) => b.length - a.length)
-    .map((c) => escapeRegExp(c))
-    .join("|");
-  if (!pattern) return value;
+  const normalizedMap = new Map(list.map((c) => [normalizeSpace(c), c]));
+  const segments = splitTextForHighlight(value, list);
 
-  const re = new RegExp(`(${pattern})`, "g");
-  const parts = value.split(re);
-  const set = new Set(list);
-
-  return parts.map((p, idx) => {
-    if (!set.has(p)) return <span key={idx}>{p}</span>;
-    const isSelected = String(selectedTerm || "") === p;
+  return segments.map((seg, idx) => {
+    if (seg.type === "plain") {
+      return <span key={idx}>{seg.text}</span>;
+    }
+    const canonical = normalizedMap.get(normalizeSpace(seg.text));
+    if (!canonical) {
+      return <span key={idx}>{seg.text}</span>;
+    }
+    const isSelected = String(selectedTerm || "") === canonical;
     return (
       <button
         key={idx}
         type="button"
         className={`${styles.termBtn} ${isSelected ? styles.termBtnSelected : ""}`}
-        onClick={() => onPick(p)}
+        onClick={() => onPick(canonical)}
       >
         <GradientText
           inline
@@ -210,11 +147,59 @@ function HighlightText({ text, candidates, selectedTerm, onPick }) {
           textWeight={700}
           pauseOnHover
         >
-          {p}
+          {seg.text}
         </GradientText>
       </button>
     );
   });
+}
+
+function extFromDataUrl(dataUrl) {
+  const m = /^data:image\/(png|jpeg|webp|gif);/i.exec(String(dataUrl || ""));
+  if (!m) return "png";
+  const t = m[1].toLowerCase();
+  if (t === "jpeg") return "jpg";
+  return t;
+}
+
+function downloadDataUrl(dataUrl, filename) {
+  const a = document.createElement("a");
+  a.href = dataUrl;
+  a.download = filename;
+  a.rel = "noopener";
+  a.click();
+}
+
+async function copyDataUrlAsImage(dataUrl) {
+  const res = await fetch(dataUrl);
+  const blob = await res.blob();
+  try {
+    await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+  } catch {
+    await navigator.clipboard.writeText(String(dataUrl));
+  }
+}
+
+function absoluteAssetUrl(url) {
+  const u = String(url || "");
+  if (u.startsWith("http")) return u;
+  if (typeof window === "undefined") return u;
+  return `${window.location.origin}${u.startsWith("/") ? u : `/${u}`}`;
+}
+
+async function downloadRemoteVideo(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("비디오 다운로드 실패");
+  const blob = await res.blob();
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "comfy-video.mp4";
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+async function copyTextToClipboard(text) {
+  await navigator.clipboard.writeText(String(text || ""));
 }
 
 export default function RunpodTestPage() {
@@ -240,7 +225,7 @@ export default function RunpodTestPage() {
   const startedAtRef = useRef(0);
   const tickTimerRef = useRef(null);
 
-  const candidates = useMemo(() => extractCandidates(text), [text]);
+  const candidates = useMemo(() => extractHighlightCandidates(text), [text]);
   const promptPreview = useMemo(() => {
     const t = String(selected || "").trim();
     const internal = /^character-[a-z0-9]+$/i.test(t);
@@ -278,8 +263,13 @@ export default function RunpodTestPage() {
   }, [count]);
 
   const imageSlots = useMemo(() => {
-    const arr = Array.isArray(images) ? images : [];
-    return Array.from({ length: requestedCount }, (_, i) => String(arr?.[i] || ""));
+    const arr = Array.isArray(images) ? images.filter(Boolean) : [];
+    if (!arr.length) return Array.from({ length: requestedCount }, () => "");
+    return Array.from({ length: requestedCount }, (_, i) => {
+      if (arr[i]) return String(arr[i]);
+      // 이미지가 1장뿐이어도 슬롯 수만큼 복제해서 보여준다.
+      return String(arr[0]);
+    });
   }, [images, requestedCount]);
 
   const errorDetail = useMemo(() => {
@@ -629,8 +619,45 @@ export default function RunpodTestPage() {
                 {imageSlots.map((src, i) => (
                   <div key={i} className={styles.imageTile} aria-label={`생성 이미지 ${i + 1}`}>
                     {src ? (
-                      <div className={styles.alphaImgWrap}>
-                        <img className={styles.mainImg} src={src} alt={`generated ${i + 1}`} />
+                      <div className={styles.mediaHoverWrap}>
+                        <div className={styles.mediaHoverActions}>
+                          <button
+                            type="button"
+                            className={styles.mediaActionBtn}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              downloadDataUrl(
+                                src,
+                                `comfy-image-${i + 1}.${extFromDataUrl(src)}`
+                              );
+                            }}
+                          >
+                            저장
+                          </button>
+                          <button
+                            type="button"
+                            className={styles.mediaActionBtn}
+                            onClick={async (e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              try {
+                                await copyDataUrlAsImage(src);
+                              } catch (err) {
+                                window.alert(String(err?.message || err));
+                              }
+                            }}
+                          >
+                            복사
+                          </button>
+                        </div>
+                        <div className={styles.alphaImgWrap}>
+                          <img
+                            className={styles.mainImg}
+                            src={src}
+                            alt={`generated ${i + 1}`}
+                          />
+                        </div>
                       </div>
                     ) : (
                       <div className={styles.emptyImageState}>
@@ -642,7 +669,48 @@ export default function RunpodTestPage() {
               </div>
               <div className={styles.videoSquare} aria-label="생성 비디오">
                 {videoUrl ? (
-                  <video className={styles.video} src={videoUrl} controls loop muted playsInline />
+                  <div className={styles.mediaHoverWrap}>
+                    <div className={styles.mediaHoverActions}>
+                      <button
+                        type="button"
+                        className={styles.mediaActionBtn}
+                        onClick={async (e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          try {
+                            await downloadRemoteVideo(videoUrl);
+                          } catch (err) {
+                            window.alert(String(err?.message || err));
+                          }
+                        }}
+                      >
+                        저장
+                      </button>
+                      <button
+                        type="button"
+                        className={styles.mediaActionBtn}
+                        onClick={async (e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          try {
+                            await copyTextToClipboard(absoluteAssetUrl(videoUrl));
+                          } catch (err) {
+                            window.alert(String(err?.message || err));
+                          }
+                        }}
+                      >
+                        복사
+                      </button>
+                    </div>
+                    <video
+                      className={styles.video}
+                      src={videoUrl}
+                      controls
+                      loop
+                      muted
+                      playsInline
+                    />
+                  </div>
                 ) : (
                   <div className={styles.emptyImageState}>비디오 대기 중</div>
                 )}

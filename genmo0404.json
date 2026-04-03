@@ -443,7 +443,7 @@
   },
   "176": {
     "inputs": {
-      "string_a": "Body language,Just moving body,To keep mum.",
+      "string_a": "Body language,Just moving body,(To keep mum:2),(don't move mouse:2)",
       "string_b": [
         "58",
         0

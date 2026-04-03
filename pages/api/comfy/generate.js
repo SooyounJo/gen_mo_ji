@@ -74,6 +74,11 @@ function hasVideoExtension(filename) {
   return f.endsWith(".mp4") || f.endsWith(".webm") || f.endsWith(".gif") || f.endsWith(".mov") || f.endsWith(".mkv");
 }
 
+function hasImageExtension(filename) {
+  const f = String(filename || "").toLowerCase();
+  return f.endsWith(".png") || f.endsWith(".jpg") || f.endsWith(".jpeg") || f.endsWith(".webp") || f.endsWith(".gif");
+}
+
 function guessVideoMime(filename) {
   const f = String(filename || "").toLowerCase();
   if (f.endsWith(".webm")) return "video/webm";
@@ -110,6 +115,7 @@ function collectMediaRefsFromHistoryEntry(entry) {
 
   const pushUnique = (ref) => {
     if (!isFileRef(ref)) return;
+    if (!hasImageExtension(ref.filename)) return;
     const key = fileRefKey(ref);
     if (seen.has(key)) return;
     seen.add(key);
@@ -194,15 +200,20 @@ function buildLocalAssetUrl({ filename, subfolder, type }) {
 
 async function waitForMedia(baseUrl, promptId, { timeoutMs = 480000, pollMs = 900, wantVideo = true } = {}) {
   const started = Date.now();
+  let lastMedia = null;
   while (Date.now() - started < timeoutMs) {
     const history = await comfyFetch(baseUrl, `/history/${encodeURIComponent(promptId)}`, { method: "GET" });
     const entry = history?.[promptId] || null;
     const media = collectMediaRefsFromHistoryEntry(entry);
     const hasImages = Array.isArray(media.imageRefs) && media.imageRefs.length > 0;
     const hasVideo = !!media.videoRef;
+    if (hasImages) lastMedia = media;
     if (hasImages && (!wantVideo || hasVideo)) return media;
 
     await sleep(pollMs);
+  }
+  if (lastMedia && Array.isArray(lastMedia.imageRefs) && lastMedia.imageRefs.length > 0) {
+    return lastMedia; // 이미지만이라도 반환 (비디오는 null 일 수 있음)
   }
   throw new Error(`ComfyUI timeout waiting for media prompt_id=${promptId}`);
 }
@@ -275,7 +286,14 @@ export default async function handler(req, res) {
     const imageRefs = Array.isArray(media.imageRefs) ? media.imageRefs.slice(0, n) : [];
     const images = [];
     for (const ref of imageRefs) {
-      images.push(await fetchViewAsDataUrl(baseUrl, ref));
+      try {
+        const dataUrl = await fetchViewAsDataUrl(baseUrl, ref);
+        if (dataUrl) images.push(dataUrl);
+      } catch (e) {
+        // Broken /view entries are skipped so valid images can still fill slots.
+        // eslint-disable-next-line no-console
+        console.warn("[comfy] skip broken image ref", ref?.filename, String(e?.message || e));
+      }
     }
 
     const videoRef = media.videoRef || null;

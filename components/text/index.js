@@ -2,6 +2,7 @@ import styles from "@/styles/Text.module.css";
 import { useTextLogic } from "./logic";
 import { useRef } from "react";
 import GradientText from "@/components/ui/GradientText";
+import { splitTextForHighlight } from "@/lib/extractHighlightCandidates";
 
 const AVATAR_1 = "https://www.figma.com/api/mcp/asset/18dff48d-f38a-47be-a34a-04b06dd781d0";
 const AVATAR_2 = "https://www.figma.com/api/mcp/asset/77875335-69e8-49ba-a511-c42c87bda56f";
@@ -49,23 +50,15 @@ function HighlightText({ text, candidates, onPick, guide, sourceMessageId }) {
   if (!text || list.length === 0) return text;
 
   const normalizedMap = new Map(list.map((c) => [normalizeSpace(c), c]));
-
-  const pattern = list
-    .slice()
-    .sort((a, b) => b.length - a.length)
-    .map(candidateToPattern)
-    .join("|");
-
-  if (!pattern) return text;
-  const re = new RegExp(`(${pattern})`, "g");
-  const parts = String(text).split(re);
+  const segments = splitTextForHighlight(String(text), list);
 
   let guideUsed = false;
-  return parts.map((p, idx) => {
-    const key = normalizeSpace(p);
-    const canonical = normalizedMap.get(key);
-    const hit = Boolean(canonical);
-    if (!hit) return <span key={idx}>{p}</span>;
+  return segments.map((seg, idx) => {
+    if (seg.type === "plain") {
+      return <span key={idx}>{seg.text}</span>;
+    }
+    const canonical = normalizedMap.get(normalizeSpace(seg.text));
+    if (!canonical) return <span key={idx}>{seg.text}</span>;
     const isGuide = Boolean(!guideUsed && guide);
     if (isGuide) guideUsed = true;
     return (
@@ -82,7 +75,7 @@ function HighlightText({ text, candidates, onPick, guide, sourceMessageId }) {
           animationSpeed={6}
           pauseOnHover
         >
-          {p}
+          {seg.text}
         </GradientText>
       </button>
     );
@@ -96,24 +89,21 @@ function InputMirror({ text, candidates, selected }) {
   if (list.length === 0) return <span className={styles.inputMirrorText}>{value}</span>;
 
   const normalizedMap = new Map(list.map((c) => [normalizeSpace(c), c]));
-  const pattern = list
-    .slice()
-    .sort((a, b) => b.length - a.length)
-    .map(candidateToPattern)
-    .join("|");
-  if (!pattern) return <span className={styles.inputMirrorText}>{value}</span>;
+  const segments = splitTextForHighlight(value, list);
 
-  const re = new RegExp(`(${pattern})`, "g");
-  const parts = value.split(re);
-
-  return parts.map((p, idx) => {
-    const key = normalizeSpace(p);
-    const canonical = normalizedMap.get(key);
-    const hit = Boolean(canonical);
-    if (!hit) {
+  return segments.map((seg, idx) => {
+    if (seg.type === "plain") {
       return (
         <span key={idx} className={styles.inputMirrorText}>
-          {p}
+          {seg.text}
+        </span>
+      );
+    }
+    const canonical = normalizedMap.get(normalizeSpace(seg.text));
+    if (!canonical) {
+      return (
+        <span key={idx} className={styles.inputMirrorText}>
+          {seg.text}
         </span>
       );
     }
@@ -127,7 +117,7 @@ function InputMirror({ text, candidates, selected }) {
           animationSpeed={6}
           pauseOnHover
         >
-          {p}
+          {seg.text}
         </GradientText>
       </span>
     );
