@@ -213,7 +213,6 @@ export default function RunpodTestPage() {
   const [count, setCount] = useState(2);
   const [elapsedMs, setElapsedMs] = useState(0);
   const [totalMs, setTotalMs] = useState(0);
-  const [debugRequest, setDebugRequest] = useState(null);
   const [debugResponse, setDebugResponse] = useState(null);
   const [promptPreviewMeta, setPromptPreviewMeta] = useState(null);
   const [promptPreviewLoading, setPromptPreviewLoading] = useState(false);
@@ -373,7 +372,6 @@ export default function RunpodTestPage() {
     setVideoUrl("");
     setElapsedMs(0);
     setTotalMs(0);
-    setDebugRequest(null);
     setDebugResponse(null);
   }
 
@@ -396,7 +394,6 @@ export default function RunpodTestPage() {
     setVideoUrl("");
     setElapsedMs(0);
     setTotalMs(0);
-    setDebugRequest(null);
     setDebugResponse(null);
 
     if (abortRef.current) abortRef.current.abort();
@@ -418,7 +415,6 @@ export default function RunpodTestPage() {
       }, 250);
 
       const payload = { prompt: t, count: requestedCount, width: 512, height: 512 };
-      setDebugRequest(payload);
 
       // eslint-disable-next-line no-console
       console.log("[runpod-test] send generate", {
@@ -460,6 +456,20 @@ export default function RunpodTestPage() {
       setElapsedMs(ms);
       setTotalMs(ms);
       if (tickTimerRef.current) window.clearInterval(tickTimerRef.current);
+
+      const meta = runData?.meta || null;
+      const promptSent = String(meta?.promptSent || "").trim();
+      const translated = Boolean(meta?.translated);
+      const sec = (ms / 1000).toFixed(1);
+      // eslint-disable-next-line no-console
+      console.log(
+        `[runpod-test] 프롬프트/결과 요약\n` +
+          `  원문: ${t}\n` +
+          `  Comfy 전송(영어): ${promptSent || "(응답 메타 없음)"}${translated ? " (번역됨)" : ""}\n` +
+          `  상태: 생성 완료\n` +
+          `  총 소요: ${sec}초 (${ms}ms)`,
+        { 원문: t, comfyEn: promptSent, 번역됨: translated, 총소요ms: ms }
+      );
     } catch (e) {
       if (controller.signal.aborted) return;
       setStatus("error");
@@ -471,6 +481,16 @@ export default function RunpodTestPage() {
       setElapsedMs(ms);
       setTotalMs(ms);
       setDebugResponse({ error: String(e?.message || e) });
+      const sec = (ms / 1000).toFixed(1);
+      // eslint-disable-next-line no-console
+      console.log(
+        `[runpod-test] 프롬프트/결과 요약\n` +
+          `  원문: ${t}\n` +
+          `  Comfy 전송(영어): (생성 실패로 확정 프롬프트 없음)\n` +
+          `  상태: 생성 실패\n` +
+          `  오류: ${String(e?.message || e)}\n` +
+          `  총 소요: ${sec}초 (${ms}ms)`
+      );
     }
   }
 
@@ -511,43 +531,51 @@ export default function RunpodTestPage() {
 
         <div className={styles.columns}>
           <section className={styles.leftPanel}>
-            <div className={styles.panelTitle}>Task</div>
+            <div className={styles.leftPanelTop}>
+              <div className={styles.panelTitle}>Task</div>
 
-            <label className={styles.label}>텍스트</label>
-            <textarea
-              className={styles.textarea}
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              rows={4}
-              placeholder="예: 춤추는 개구리"
-              spellCheck={false}
-            />
+              <label className={styles.label}>텍스트</label>
+              <textarea
+                className={styles.textarea}
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                rows={3}
+                placeholder="예: 춤추는 개구리"
+                spellCheck={false}
+              />
 
-            <label className={styles.label}>이미지 수 (count)</label>
-            <input
-              className={styles.countInput}
-              type="number"
-              min={1}
-              max={4}
-              step={1}
-              value={count}
-              onChange={(e) => setCount(e.target.value)}
-            />
+              <div className={styles.countRow}>
+                <label className={styles.label} htmlFor="runpod-count">
+                  이미지 수 (count)
+                </label>
+                <input
+                  id="runpod-count"
+                  className={styles.countInput}
+                  type="number"
+                  min={1}
+                  max={4}
+                  step={1}
+                  value={count}
+                  onChange={(e) => setCount(e.target.value)}
+                />
+              </div>
 
-            <div className={styles.previewLabel}>하이라이트 (클릭)</div>
-            <div className={styles.previewBox} aria-label="하이라이트 프리뷰">
-              <HighlightText text={text} candidates={candidates} selectedTerm={selected} onPick={setSelected} />
+              <div className={styles.previewLabel}>하이라이트 (클릭)</div>
+              <div className={styles.previewBox} aria-label="하이라이트 프리뷰">
+                <HighlightText text={text} candidates={candidates} selectedTerm={selected} onPick={setSelected} />
+              </div>
+
+              <button
+                type="button"
+                className={styles.sendBtn}
+                onClick={() => generate(selected)}
+                disabled={status === "loading" || !String(selected || "").trim()}
+              >
+                Send
+              </button>
             </div>
 
-            <button
-              type="button"
-              className={styles.sendBtn}
-              onClick={() => generate(selected)}
-              disabled={status === "loading" || !String(selected || "").trim()}
-            >
-              Send
-            </button>
-
+            <div className={styles.leftPanelScroll}>
             <div className={styles.metaCard}>
               <div className={styles.metaLine}>
                 <span className={styles.metaKey}>선택</span>
@@ -587,133 +615,128 @@ export default function RunpodTestPage() {
               <div className={styles.errorPanelText}>{errorDetail}</div>
             </div>
 
-            <div className={styles.debugPanel}>
-              <div className={styles.debugPanelTitle}>디버그 (전송/응답)</div>
-              <div className={styles.debugPanelText}>
-                <div className={styles.debugBlockTitle}>request → /api/comfy/generate</div>
-                <pre className={styles.debugPre}>{debugRequest ? JSON.stringify(debugRequest, null, 2) : "(없음)"}</pre>
-                <div className={styles.debugBlockTitle}>response ← /api/comfy/generate</div>
-                <pre className={styles.debugPre}>{debugResponse ? JSON.stringify(debugResponse, null, 2) : "(없음)"}</pre>
-              </div>
-            </div>
-
             <div className={styles.actionRow}>
               {status === "error" ? (
-                <button type="button" onClick={retry} disabled={!lastTermRef.current}>
+                <button type="button" className={styles.secondaryBtn} onClick={retry} disabled={!lastTermRef.current}>
                   다시 시도
                 </button>
               ) : null}
               {status === "loading" || status === "error" ? (
-                <button type="button" onClick={cancel}>
+                <button type="button" className={styles.secondaryBtn} onClick={cancel}>
                   취소
                 </button>
               ) : null}
             </div>
+            </div>
           </section>
 
           <section className={styles.rightPanel}>
-            <div className={styles.panelTitle}>Result</div>
-            <div className={styles.processLine}>{processLine}</div>
-            <div className={styles.resultScroll} aria-label="생성 결과(스크롤)">
-              <div className={styles.imageGrid} aria-label="생성 이미지들">
-                {imageSlots.map((src, i) => (
-                  <div key={i} className={styles.imageTile} aria-label={`생성 이미지 ${i + 1}`}>
-                    {src ? (
-                      <div className={styles.mediaHoverWrap}>
-                        <div className={styles.mediaHoverActions}>
-                          <button
-                            type="button"
-                            className={styles.mediaActionBtn}
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              downloadDataUrl(
-                                src,
-                                `comfy-image-${i + 1}.${extFromDataUrl(src)}`
-                              );
-                            }}
-                          >
-                            저장
-                          </button>
-                          <button
-                            type="button"
-                            className={styles.mediaActionBtn}
-                            onClick={async (e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              try {
-                                await copyDataUrlAsImage(src);
-                              } catch (err) {
-                                window.alert(String(err?.message || err));
-                              }
-                            }}
-                          >
-                            복사
-                          </button>
+            <div className={styles.rightPanelHeader}>
+              <div className={styles.panelTitle}>Result</div>
+              <div className={styles.processLine}>{processLine}</div>
+            </div>
+            <div className={styles.resultScroll} aria-label="생성 결과">
+              <div className={styles.resultGrid}>
+                {[0, 1].map((i) => {
+                  const src = imageSlots[i] || "";
+                  return (
+                    <div key={`img-${i}`} className={styles.resultCell} aria-label={`생성 이미지 ${i + 1}`}>
+                      {src ? (
+                        <div className={styles.mediaHoverWrap}>
+                          <div className={styles.mediaHoverActions}>
+                            <button
+                              type="button"
+                              className={styles.mediaActionBtn}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                downloadDataUrl(src, `comfy-image-${i + 1}.${extFromDataUrl(src)}`);
+                              }}
+                            >
+                              저장
+                            </button>
+                            <button
+                              type="button"
+                              className={styles.mediaActionBtn}
+                              onClick={async (e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                try {
+                                  await copyDataUrlAsImage(src);
+                                } catch (err) {
+                                  window.alert(String(err?.message || err));
+                                }
+                              }}
+                            >
+                              복사
+                            </button>
+                          </div>
+                          <div className={styles.alphaImgWrap}>
+                            <img className={styles.mainImg} src={src} alt={`generated ${i + 1}`} />
+                          </div>
                         </div>
-                        <div className={styles.alphaImgWrap}>
-                          <img
-                            className={styles.mainImg}
-                            src={src}
-                            alt={`generated ${i + 1}`}
-                          />
+                      ) : (
+                        <div className={styles.emptyImageState}>
+                          {status === "loading" ? `이미지 ${i + 1} 생성 중…` : `이미지 ${i + 1} 대기`}
                         </div>
-                      </div>
-                    ) : (
-                      <div className={styles.emptyImageState}>
-                        {status === "loading" ? `이미지 ${i + 1} 생성 중…` : `이미지 ${i + 1} 대기`}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-              <div className={styles.videoSquare} aria-label="생성 비디오">
-                {videoUrl ? (
-                  <div className={styles.mediaHoverWrap}>
-                    <div className={styles.mediaHoverActions}>
-                      <button
-                        type="button"
-                        className={styles.mediaActionBtn}
-                        onClick={async (e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          try {
-                            await downloadRemoteVideo(videoUrl);
-                          } catch (err) {
-                            window.alert(String(err?.message || err));
-                          }
-                        }}
-                      >
-                        저장
-                      </button>
-                      <button
-                        type="button"
-                        className={styles.mediaActionBtn}
-                        onClick={async (e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          try {
-                            await copyTextToClipboard(absoluteAssetUrl(videoUrl));
-                          } catch (err) {
-                            window.alert(String(err?.message || err));
-                          }
-                        }}
-                      >
-                        복사
-                      </button>
+                      )}
                     </div>
-                    <video
-                      className={styles.video}
-                      src={videoUrl}
-                      controls
-                      loop
-                      muted
-                      playsInline
-                    />
-                  </div>
-                ) : (
-                  <div className={styles.emptyImageState}>비디오 대기 중</div>
-                )}
+                  );
+                })}
+
+                <div className={styles.resultCell} aria-label="생성 비디오">
+                  {videoUrl ? (
+                    <div className={styles.mediaHoverWrap}>
+                      <div className={styles.mediaHoverActions}>
+                        <button
+                          type="button"
+                          className={styles.mediaActionBtn}
+                          onClick={async (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            try {
+                              await downloadRemoteVideo(videoUrl);
+                            } catch (err) {
+                              window.alert(String(err?.message || err));
+                            }
+                          }}
+                        >
+                          저장
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.mediaActionBtn}
+                          onClick={async (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            try {
+                              await copyTextToClipboard(absoluteAssetUrl(videoUrl));
+                            } catch (err) {
+                              window.alert(String(err?.message || err));
+                            }
+                          }}
+                        >
+                          복사
+                        </button>
+                      </div>
+                      <video
+                        className={styles.video}
+                        src={videoUrl}
+                        controls
+                        loop
+                        muted
+                        playsInline
+                      />
+                    </div>
+                  ) : (
+                    <div className={styles.emptyImageState}>비디오 대기 중</div>
+                  )}
+                </div>
+
+                <div
+                  className={`${styles.resultCell} ${styles.resultCellBlank}`}
+                  aria-hidden="true"
+                />
               </div>
             </div>
           </section>
