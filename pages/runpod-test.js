@@ -341,6 +341,13 @@ export default function RunpodTestPage() {
         selected: t,
         request: { prompt: promptEn, motion: "posing", count: requestedCount, width: 512, height: 512 }
       });
+      // eslint-disable-next-line no-console
+      console.log("[runpod-test] interpretation", {
+        note: "이 테스트 페이지는 선택 텍스트를 prompt로 그대로 전송합니다(추가 분석 없음).",
+        selected: t,
+        prompt: promptEn,
+        motion: "posing"
+      });
       const runRes = await fetch("/api/comfy/generate", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -355,6 +362,12 @@ export default function RunpodTestPage() {
       });
       const runData = await runRes.json().catch(() => ({}));
       if (!runRes.ok) throw new Error(runData?.detail || runData?.error || "ComfyUI generate 실패");
+      // eslint-disable-next-line no-console
+      console.log("[runpod-test] response <- /api/comfy/generate", {
+        images: Array.isArray(runData?.images) ? runData.images.length : 0,
+        videoUrl: String(runData?.videoUrl || ""),
+        videoRef: runData?.videoRef || null
+      });
       const imgs = Array.isArray(runData?.images) ? runData.images.filter(Boolean) : [];
       setImages(imgs.slice(0, requestedCount));
       setVideoUrl(String(runData?.videoUrl || ""));
@@ -483,25 +496,29 @@ export default function RunpodTestPage() {
           <section className={styles.rightPanel}>
             <div className={styles.panelTitle}>Result</div>
             <div className={styles.processLine}>{processLine}</div>
-            <div className={styles.imageGrid} aria-label="생성 이미지들">
-              {imageSlots.map((src, i) => (
-                <div key={i} className={styles.imageTile} aria-label={`생성 이미지 ${i + 1}`}>
-                  {src ? (
-                    <div className={styles.alphaImgWrap}>
-                      <img className={styles.mainImg} src={src} alt={`generated ${i + 1}`} />
-                    </div>
-                  ) : (
-                    <div className={styles.emptyImageState}>{status === "loading" ? `이미지 ${i + 1} 생성 중…` : `이미지 ${i + 1} 대기`}</div>
-                  )}
-                </div>
-              ))}
-            </div>
-            <div className={styles.videoTile} aria-label="생성 비디오" style={{ marginTop: 12 }}>
-              {videoUrl ? (
-                <video className={styles.video} src={videoUrl} controls loop muted playsInline />
-              ) : (
-                <div className={styles.emptyImageState}>비디오 대기 중</div>
-              )}
+            <div className={styles.resultScroll} aria-label="생성 결과(스크롤)">
+              <div className={styles.imageGrid} aria-label="생성 이미지들">
+                {imageSlots.map((src, i) => (
+                  <div key={i} className={styles.imageTile} aria-label={`생성 이미지 ${i + 1}`}>
+                    {src ? (
+                      <div className={styles.alphaImgWrap}>
+                        <img className={styles.mainImg} src={src} alt={`generated ${i + 1}`} />
+                      </div>
+                    ) : (
+                      <div className={styles.emptyImageState}>
+                        {status === "loading" ? `이미지 ${i + 1} 생성 중…` : `이미지 ${i + 1} 대기`}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <div className={styles.videoSquare} aria-label="생성 비디오">
+                {videoUrl ? (
+                  <video className={styles.video} src={videoUrl} controls loop muted playsInline />
+                ) : (
+                  <div className={styles.emptyImageState}>비디오 대기 중</div>
+                )}
+              </div>
             </div>
           </section>
         </div>

@@ -623,17 +623,22 @@ export function useTextLogic() {
                   : analysis.action === "변신하기"
                     ? "transforming"
                     : "posing";
+        // eslint-disable-next-line no-console
+        console.log("[comfy] ai interpretation (analysis)", analysis);
+        const payload = {
+          prompt: analysis.imagePrompt,
+          motion,
+          width: 1024,
+          height: 1024,
+          count: 2
+        };
+        // eslint-disable-next-line no-console
+        console.log("[comfy] request payload -> /api/comfy/generate", payload);
         const res = await fetch("/api/comfy/generate", {
           method: "POST",
           headers: { "content-type": "application/json" },
           signal: controller.signal,
-          body: JSON.stringify({
-            prompt: analysis.imagePrompt,
-            motion,
-            width: 1024,
-            height: 1024,
-            count: 2
-          })
+          body: JSON.stringify(payload)
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data?.detail || data?.error || "이미지 생성 실패");
@@ -641,6 +646,12 @@ export function useTextLogic() {
         const imgs = Array.isArray(data?.images) ? data.images.filter(Boolean) : [];
         setDraftPreviewImages(imgs.slice(0, 2));
         setDraftPreviewVideoUrl(String(data?.videoUrl || ""));
+        // eslint-disable-next-line no-console
+        console.log("[comfy] response <- /api/comfy/generate", {
+          images: Array.isArray(data?.images) ? data.images.length : 0,
+          videoUrl: String(data?.videoUrl || ""),
+          videoRef: data?.videoRef || null
+        });
         setDraftGenerateStatus("done");
       } catch (e) {
         if (controller.signal.aborted) return;
